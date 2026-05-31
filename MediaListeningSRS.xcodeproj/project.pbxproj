@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8EF433702FCBD750007EE5F2 /* MSRS.AppDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = 8EF4336F2FCBD750007EE5F2 /* MSRS.AppDependencies */; };
+		8EF433722FCBD750007EE5F2 /* MSRS.AppSceneDelegate in Frameworks */ = {isa = PBXBuildFile; productRef = 8EF433712FCBD750007EE5F2 /* MSRS.AppSceneDelegate */; };
+		8EF433742FCBD750007EE5F2 /* MSRS.MediaListeningSRSApp in Frameworks */ = {isa = PBXBuildFile; productRef = 8EF433732FCBD750007EE5F2 /* MSRS.MediaListeningSRSApp */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		8EF433362FCBD68B007EE5F2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,11 +33,25 @@
 		8EF433272FCBD68A007EE5F2 /* MediaListeningSRS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MediaListeningSRS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8EF433352FCBD68B007EE5F2 /* MediaListeningSRSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MediaListeningSRSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8EF4333F2FCBD68B007EE5F2 /* MediaListeningSRSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MediaListeningSRSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8EF433A32FCBD936007EE5F2 /* MediaListeningSRSAppOld */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = MediaListeningSRSAppOld; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8EF434052FCBDD79007EE5F2 /* Exceptions for "MediaListeningSRS" folder in "MediaListeningSRS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8EF433262FCBD68A007EE5F2 /* MediaListeningSRS */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8EF433292FCBD68A007EE5F2 /* MediaListeningSRS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8EF434052FCBDD79007EE5F2 /* Exceptions for "MediaListeningSRS" folder in "MediaListeningSRS" target */,
+			);
 			path = MediaListeningSRS;
 			sourceTree = "<group>";
 		};
@@ -52,6 +72,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8EF433722FCBD750007EE5F2 /* MSRS.AppSceneDelegate in Frameworks */,
+				8EF433742FCBD750007EE5F2 /* MSRS.MediaListeningSRSApp in Frameworks */,
+				8EF433702FCBD750007EE5F2 /* MSRS.AppDependencies in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,6 +98,7 @@
 		8EF4331E2FCBD689007EE5F2 = {
 			isa = PBXGroup;
 			children = (
+				8EF433A42FCBD936007EE5F2 /* Packages */,
 				8EF433292FCBD68A007EE5F2 /* MediaListeningSRS */,
 				8EF433382FCBD68B007EE5F2 /* MediaListeningSRSTests */,
 				8EF433422FCBD68B007EE5F2 /* MediaListeningSRSUITests */,
@@ -90,6 +114,14 @@
 				8EF4333F2FCBD68B007EE5F2 /* MediaListeningSRSUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		8EF433A42FCBD936007EE5F2 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				8EF433A32FCBD936007EE5F2 /* MediaListeningSRSAppOld */,
+			);
+			path = Packages;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +144,9 @@
 			);
 			name = MediaListeningSRS;
 			packageProductDependencies = (
+				8EF4336F2FCBD750007EE5F2 /* MSRS.AppDependencies */,
+				8EF433712FCBD750007EE5F2 /* MSRS.AppSceneDelegate */,
+				8EF433732FCBD750007EE5F2 /* MSRS.MediaListeningSRSApp */,
 			);
 			productName = MediaListeningSRS;
 			productReference = 8EF433272FCBD68A007EE5F2 /* MediaListeningSRS.app */;
@@ -195,6 +230,8 @@
 			);
 			mainGroup = 8EF4331E2FCBD689007EE5F2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8EF433282FCBD68A007EE5F2 /* Products */;
 			projectDirPath = "";
@@ -397,8 +434,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_FILE = MediaListeningSRS/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
@@ -412,11 +448,12 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.elixirapps.MediaListeningSRS;
+				PRODUCT_BUNDLE_IDENTIFIER = com.elixirapps.MediaListeningSRS2;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
+				SUPPORTS_MACCATALYST = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
@@ -436,8 +473,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_FILE = MediaListeningSRS/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
@@ -451,11 +487,12 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.elixirapps.MediaListeningSRS;
+				PRODUCT_BUNDLE_IDENTIFIER = com.elixirapps.MediaListeningSRS2;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
+				SUPPORTS_MACCATALYST = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
@@ -593,6 +630,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8EF4336F2FCBD750007EE5F2 /* MSRS.AppDependencies */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MSRS.AppDependencies;
+		};
+		8EF433712FCBD750007EE5F2 /* MSRS.AppSceneDelegate */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MSRS.AppSceneDelegate;
+		};
+		8EF433732FCBD750007EE5F2 /* MSRS.MediaListeningSRSApp */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MSRS.MediaListeningSRSApp;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8EF4331F2FCBD689007EE5F2 /* Project object */;
 }
