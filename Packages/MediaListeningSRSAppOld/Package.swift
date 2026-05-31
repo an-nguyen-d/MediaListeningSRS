@@ -15,12 +15,16 @@ let package = Package(
     PackageDependency.SwiftTagged.packageDependency,
     PackageDependency.SwiftCustomDump.packageDependency,
     PackageDependency.IdentifiedCollections.packageDependency,
+    PackageDependency.GRDB.packageDependency,
+    PackageDependency.JapaneseMediaLibrary.packageDependency,
+    PackageDependency.MediaWordBankTagger.packageDependency,
+    PackageDependency.NyanimeSharedAnimeClipDatabase.packageDependency,
+    PackageDependency.iYomi.packageDependency,
 
     // Pre-stubbed but inactive — uncomment to activate.
 //    PackageDependency.Firebase.packageDependency,
 //    PackageDependency.Lottie.packageDependency,
 //    PackageDependency.Superwall.packageDependency,
-//    PackageDependency.GRDB.packageDependency,
 //    PackageDependency.SQLiteSwift.packageDependency,
 //    PackageDependency.SwiftLint.packageDependency,
 //    PackageDependency.Quick.packageDependency,
@@ -50,8 +54,20 @@ enum PackageTarget: String, CaseIterable {
 
   case AppDependencies
   case AppSceneDelegate
+  case CandidateDetailScene
+  case ClipExportService
+  case FSRS
   case HomeScene
   case MediaListeningSRSApp
+  case MediaListeningSRSDatabaseClient
+  case MediaListeningSRSDatabaseClientGRDB
+  case MediaSourceImportEpisodePickerScene
+  case MediaSourceImportPickerScene
+  case MediaSourceImportService
+  case MediaSourcesListScene
+  case ProcessingQueueScene
+  case SettingsScene
+  case SRSCardReviewScene
   case Shared
   case SharedModels
 
@@ -79,10 +95,20 @@ enum PackageTarget: String, CaseIterable {
     case .AppDependencies:
       return createPackageTarget(
         dependencies: createTargetDependencies(
+          .ClipExportService,
+          .MediaListeningSRSDatabaseClient,
+          .MediaListeningSRSDatabaseClientGRDB,
+          .MediaSourceImportService,
           .Shared,
           .SharedModels
         ) + [
           PackageDependency.ElixirShared.Product.ElixirShared.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClientGRDB.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClientGRDB.targetDependency,
+          PackageDependency.NyanimeSharedAnimeClipDatabase.Product.SharedAnimeClipDatabase.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
         ]
       )
 
@@ -91,6 +117,7 @@ enum PackageTarget: String, CaseIterable {
         dependencies: createTargetDependencies(
           .AppDependencies,
           .HomeScene,
+          .MediaSourcesListScene,
           .Shared,
           .SharedModels
         ) + [
@@ -113,6 +140,153 @@ enum PackageTarget: String, CaseIterable {
         ]
       )
 
+    case .MediaListeningSRSDatabaseClient:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .SharedModels
+        ) + [
+          PackageDependency.SwiftTagged.Product.tagged.targetDependency,
+        ]
+      )
+
+    case .MediaListeningSRSDatabaseClientGRDB:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .FSRS,
+          .MediaListeningSRSDatabaseClient,
+          .SharedModels
+        ) + [
+          PackageDependency.GRDB.Product.GRDB.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+        ]
+      )
+
+    case .MediaSourceImportService:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .MediaListeningSRSDatabaseClient,
+          .SharedModels
+        ) + [
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
+        ]
+      )
+
+    case .CandidateDetailScene:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .ClipExportService,
+          .MediaListeningSRSDatabaseClient,
+          .Shared,
+          .SharedModels
+        ) + [
+          PackageDependency.ElixirShared.Product.ElixirShared.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.SharedModels.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryModels.targetDependency,
+        ]
+      )
+
+    case .ClipExportService:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .SharedModels
+        ) + [
+        ]
+      )
+
+    case .FSRS:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+        ) + [
+        ]
+      )
+
+    case .MediaSourceImportEpisodePickerScene:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .MediaSourceImportService,
+          .SharedModels
+        ) + [
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
+        ]
+      )
+
+    case .MediaSourceImportPickerScene:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .MediaSourceImportEpisodePickerScene,
+          .MediaSourceImportService,
+          .SharedModels
+        ) + [
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
+        ]
+      )
+
+    case .MediaSourcesListScene:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .MediaListeningSRSDatabaseClient,
+          .MediaSourceImportPickerScene,
+          .ProcessingQueueScene,
+          .SettingsScene,
+          .SharedModels,
+          .SRSCardReviewScene
+        ) + [
+        ]
+      )
+
+    case .ProcessingQueueScene:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .CandidateDetailScene,
+          .ClipExportService,
+          .MediaListeningSRSDatabaseClient,
+          .Shared,
+          .SharedModels
+        ) + [
+          PackageDependency.ElixirShared.Product.ElixirShared.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
+        ]
+      )
+
+    case .SettingsScene:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .Shared
+        ) + [
+        ]
+      )
+
+    case .SRSCardReviewScene:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .ClipExportService,
+          .MediaListeningSRSDatabaseClient,
+          .Shared,
+          .SharedModels
+        ) + [
+          PackageDependency.ElixirShared.Product.ElixirShared.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.SharedModels.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryModels.targetDependency,
+        ]
+      )
+
     case .Shared:
       return createPackageTarget(
         dependencies: createTargetDependencies(
@@ -120,6 +294,11 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.ElixirShared.Product.ElixirShared.targetDependency,
           PackageDependency.SwiftTagged.Product.tagged.targetDependency,
           PackageDependency.IdentifiedCollections.Product.identifiedCollections.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryModels.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryUIKit.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseModels.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseTextClient.targetDependency,
         ]
       )
 
@@ -130,6 +309,7 @@ enum PackageTarget: String, CaseIterable {
         ) + [
           PackageDependency.SwiftTagged.Product.tagged.targetDependency,
           PackageDependency.IdentifiedCollections.Product.identifiedCollections.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
         ]
       )
 
@@ -514,6 +694,115 @@ extension PackageDependency {
 
       var targetDependency: Target.Dependency {
         .product(name: self.rawValue, package: package)
+      }
+    }
+  }
+
+}
+
+// MARK: - JapaneseMediaLibrary
+extension PackageDependency {
+
+  enum JapaneseMediaLibrary {
+    static let package = "JapaneseMediaLibraryApp"
+
+    static var packageDependency: Package.Dependency {
+      .package(
+        url: "file:///Users/annguyen/Documents/2. Areas/Xcode Projects/JapaneseMediaLibrary/Packages/JapaneseMediaLibraryApp",
+        branch: "main"
+      )
+    }
+
+    enum Product: String {
+      case JMLDatabaseClient
+      case JMLDatabaseClientGRDB
+      case JMLSharedModels
+      case SceneDelegate
+
+      var targetDependency: Target.Dependency {
+        .product(name: "JML." + self.rawValue, package: package)
+      }
+    }
+  }
+
+}
+
+// MARK: - MediaWordBankTagger
+extension PackageDependency {
+
+  enum MediaWordBankTagger {
+    static let package = "MediaWordBankTaggerApp"
+
+    static var packageDependency: Package.Dependency {
+      .package(
+        url: "file:///Users/annguyen/Documents/2. Areas/Xcode Projects/MediaWordBankTagger/Packages/MediaWordBankTaggerApp",
+        branch: "main"
+      )
+    }
+
+    enum Product: String {
+      case METGDatabaseClient
+      case METGDatabaseClientGRDB
+      case SharedModels
+
+      var targetDependency: Target.Dependency {
+        .product(name: "METG." + self.rawValue, package: package)
+      }
+    }
+  }
+
+}
+
+// MARK: - NyanimeSharedAnimeClipDatabase
+extension PackageDependency {
+
+  enum NyanimeSharedAnimeClipDatabase {
+    static let package = "NyanimeSharedAnimeClipDatabase"
+
+    static var packageDependency: Package.Dependency {
+      .package(
+        url: "file:///Users/annguyen/Documents/2. Areas/Xcode Projects/NyanimeSharedAnimeClipDatabase/Packages/NyanimeSharedAnimeClipDatabase",
+        branch: "main"
+      )
+    }
+
+    enum Product: String {
+      case SharedAnimeClipDatabase
+      case RemoteStorageClient
+
+      var targetDependency: Target.Dependency {
+        .product(name: "NYAN." + self.rawValue, package: package)
+      }
+    }
+  }
+
+}
+
+// MARK: - iYomi
+extension PackageDependency {
+
+  enum iYomi {
+    static let package = "iYomi"
+
+    static var packageDependency: Package.Dependency {
+      .package(
+        url: "file:///Users/annguyen/Documents/2. Areas/Xcode Projects/iYomi/Packages/iYomi",
+        branch: "main"
+      )
+    }
+
+    enum Product: String {
+      case DictionaryClient
+      case DictionaryLookupClient
+      case DictionaryModels
+      case DictionaryUIKit
+      case DeinflectionClient
+      case JapaneseModels
+      case JapaneseParserClient
+      case JapaneseTextClient
+
+      var targetDependency: Target.Dependency {
+        .product(name: "IYO." + self.rawValue, package: package)
       }
     }
   }

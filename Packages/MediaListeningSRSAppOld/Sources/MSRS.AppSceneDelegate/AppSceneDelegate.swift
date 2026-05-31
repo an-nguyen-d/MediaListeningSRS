@@ -1,6 +1,6 @@
 import UIKit
 import MSRS_AppDependencies
-import MSRS_HomeScene
+import MSRS_MediaSourcesListScene
 
 open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -19,8 +19,11 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
   ) {
     guard let windowScene = scene as? UIWindowScene else { fatalError() }
 
+    let rootVC = MediaSourcesListVC(dependencies: dependencies)
+    let navigationController = UINavigationController(rootViewController: rootVC)
+
     let window = UIWindow(windowScene: windowScene)
-    window.rootViewController = HomeScene()
+    window.rootViewController = navigationController
     window.makeKeyAndVisible()
     self.window = window
   }
