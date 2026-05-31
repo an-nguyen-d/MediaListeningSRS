@@ -162,6 +162,29 @@ extension MediaListeningSRSDatabaseClient {
                     columns: ["japaneseTermID"])
     }
 
+    migrator.registerMigration("2") { db in
+
+      try db.create(table: "japaneseTermCardCoverageRecord") { t in
+        t.autoIncrementedPrimaryKey("id")
+        t.column("japaneseTermID", .integer).notNull().unique()
+        t.column("cardCoverageCount", .integer).notNull().defaults(to: 0)
+      }
+      try db.create(index: "idx_jtccr_termID",
+                    on: "japaneseTermCardCoverageRecord",
+                    columns: ["japaneseTermID"])
+
+      try db.alter(table: "mediaSourceCardCandidateRecord") { t in
+        t.add(column: "isAutoFiltered", .boolean).notNull().defaults(to: false)
+      }
+
+      try db.execute(sql: """
+        INSERT INTO japaneseTermCardCoverageRecord (japaneseTermID, cardCoverageCount)
+        SELECT japaneseTermID, COUNT(DISTINCT cardID)
+        FROM srsCardJapaneseTermLinkRecord
+        GROUP BY japaneseTermID
+      """)
+    }
+
     return migrator
   }
 }

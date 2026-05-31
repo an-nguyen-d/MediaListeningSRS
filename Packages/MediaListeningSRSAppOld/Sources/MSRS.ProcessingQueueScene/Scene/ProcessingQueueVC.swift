@@ -16,6 +16,8 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
   /// after a skip/make-card removes the current one from the queue.
   private var currentDetailVCSubtitleIndex: Int?
 
+  private static let instructionsUserDefaultsKeyPrefix = "MSRS.ProcessingQueue.instructions"
+
   private weak var activeConfirmationPopup: PopupOverlayView?
   private var pendingConfirmAction: (() -> Void)?
 
@@ -49,6 +51,10 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
     contentView.onRowTapped = { [weak self] id in
       self?.interactor.sendAction(.rowTapped(id))
     }
+    contentView.onInstructionsSaveRequested = { [weak self] text in
+      self?.saveInstructions(text)
+    }
+    loadInstructions()
     interactor.sendAction(.viewDidLoad)
     showPlaceholder()
   }
@@ -61,6 +67,7 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
   public override var canBecomeFirstResponder: Bool { true }
 
   public override var keyCommands: [UIKeyCommand]? {
+    if contentView.isEditingInstructions { return nil }
     var commands: [UIKeyCommand] = [
       UIKeyCommand(input: " ", modifierFlags: [], action: #selector(spacePressed), discoverabilityTitle: "Toggle Play/Pause"),
       UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: #selector(prevRowPressed), discoverabilityTitle: "Previous Subtitle"),
@@ -303,5 +310,20 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
       label.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.detailContainerView.leadingAnchor, constant: 24),
       label.trailingAnchor.constraint(lessThanOrEqualTo: contentView.detailContainerView.trailingAnchor, constant: -24),
     ])
+  }
+
+  // MARK: - Instructions persistence
+
+  private var instructionsUserDefaultsKey: String {
+    "\(Self.instructionsUserDefaultsKeyPrefix).\(mediaSourceID.rawValue)"
+  }
+
+  private func loadInstructions() {
+    let text = UserDefaults.standard.string(forKey: instructionsUserDefaultsKey) ?? ""
+    contentView.setInstructionsText(text)
+  }
+
+  private func saveInstructions(_ text: String) {
+    UserDefaults.standard.set(text, forKey: instructionsUserDefaultsKey)
   }
 }

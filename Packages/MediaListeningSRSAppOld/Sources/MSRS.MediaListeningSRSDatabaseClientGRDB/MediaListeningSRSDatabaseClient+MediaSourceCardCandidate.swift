@@ -23,7 +23,8 @@ extension MediaListeningSRSDatabaseClient {
               mediaSourceID: request.mediaSourceID.rawValue,
               subtitleIndex: input.subtitleIndex,
               isSkipped: false,
-              wasUsedInCard: false
+              wasUsedInCard: false,
+              isAutoFiltered: false
             )
             try record.insert(db)
             createdRecords.append(record)
@@ -68,6 +69,7 @@ extension MediaListeningSRSDatabaseClient {
                   .filter(Column("mediaSourceID") == request.mediaSourceID.rawValue)
                   .filter(Column("isSkipped") == false)
                   .filter(Column("wasUsedInCard") == false)
+                  .filter(Column("isAutoFiltered") == false)
                   .order(Column("subtitleIndex").asc)
                   .fetchAll(db)
               }

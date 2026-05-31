@@ -316,18 +316,38 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
     }
 
+    public enum FetchInvalidTermIDs {
+      public struct Request: Sendable {
+        public let japaneseTermIDs: [Int64]
+        public let coverageThreshold: Int
+        public init(japaneseTermIDs: [Int64], coverageThreshold: Int) {
+          self.japaneseTermIDs = japaneseTermIDs
+          self.coverageThreshold = coverageThreshold
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public let invalidTermIDs: Set<Int64>
+        public init(invalidTermIDs: Set<Int64>) {
+          self.invalidTermIDs = invalidTermIDs
+        }
+      }
+    }
+
     public var markAsKnown: @Sendable (MarkAsKnown.Request) async throws -> MarkAsKnown.Response
     public var isKnown: @Sendable (IsKnown.Request) async throws -> IsKnown.Response
     public var fetchKnownStatusForTermIDs: @Sendable (FetchKnownStatusForTermIDs.Request) async throws -> FetchKnownStatusForTermIDs.Response
+    public var fetchInvalidTermIDs: @Sendable (FetchInvalidTermIDs.Request) async throws -> FetchInvalidTermIDs.Response
 
     public init(
       markAsKnown: @Sendable @escaping (MarkAsKnown.Request) async throws -> MarkAsKnown.Response,
       isKnown: @Sendable @escaping (IsKnown.Request) async throws -> IsKnown.Response,
-      fetchKnownStatusForTermIDs: @Sendable @escaping (FetchKnownStatusForTermIDs.Request) async throws -> FetchKnownStatusForTermIDs.Response
+      fetchKnownStatusForTermIDs: @Sendable @escaping (FetchKnownStatusForTermIDs.Request) async throws -> FetchKnownStatusForTermIDs.Response,
+      fetchInvalidTermIDs: @Sendable @escaping (FetchInvalidTermIDs.Request) async throws -> FetchInvalidTermIDs.Response
     ) {
       self.markAsKnown = markAsKnown
       self.isKnown = isKnown
       self.fetchKnownStatusForTermIDs = fetchKnownStatusForTermIDs
+      self.fetchInvalidTermIDs = fetchInvalidTermIDs
     }
   }
   public var knownJapaneseTerm: KnownJapaneseTerm

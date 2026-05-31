@@ -29,4 +29,20 @@ public enum MSRSAppSettings {
       UserDefaults.standard.set(newValue, forKey: desiredRetentionKey)
     }
   }
+
+  private static let minimumCardCoverageCountKey = "MSRS.Settings.minimumCardCoverageCount"
+  public static let minimumCardCoverageCountDefault: Int = 50
+
+  public static var minimumCardCoverageCount: Int {
+    get {
+      if UserDefaults.standard.object(forKey: minimumCardCoverageCountKey) == nil {
+        return minimumCardCoverageCountDefault
+      }
+      let value = UserDefaults.standard.integer(forKey: minimumCardCoverageCountKey)
+      return max(1, value)
+    }
+    set {
+      UserDefaults.standard.set(max(1, newValue), forKey: minimumCardCoverageCountKey)
+    }
+  }
 }

@@ -8,9 +8,20 @@ final class ProcessingQueueView: UIView {
 
   let detailContainerView = UIView()
 
+  var onInstructionsSaveRequested: ((String) -> Void)? {
+    get { instructionsView.onSaveInstructions }
+    set { instructionsView.onSaveInstructions = newValue }
+  }
+
+  var isEditingInstructions: Bool {
+    instructionsView.isEditingInstructions
+  }
+
   private let tableView = UITableView(frame: .zero, style: .insetGrouped)
   private let emptyLabel = UILabel()
   private let separatorView = UIView()
+  private let instructionsView = ProcessingQueueInstructionsView()
+  private let instructionsSeparatorView = UIView()
   private var rows: [ProcessingQueueModels.Row] = []
   private var selectedRowID: MediaSourceCardCandidateModel.ID?
 
@@ -19,6 +30,7 @@ final class ProcessingQueueView: UIView {
     backgroundColor = .systemBackground
     setUpTableView()
     setUpDetailContainer()
+    setUpInstructionsPanel()
     setUpEmptyLabel()
     setUpSeparator()
     setUpConstraints()
@@ -52,6 +64,15 @@ final class ProcessingQueueView: UIView {
     emptyLabel.translatesAutoresizingMaskIntoConstraints = false
   }
 
+  private func setUpInstructionsPanel() {
+    instructionsSeparatorView.backgroundColor = .separator
+    addSubview(instructionsSeparatorView)
+    instructionsSeparatorView.translatesAutoresizingMaskIntoConstraints = false
+
+    addSubview(instructionsView)
+    instructionsView.translatesAutoresizingMaskIntoConstraints = false
+  }
+
   private func setUpSeparator() {
     separatorView.backgroundColor = .separator
     addSubview(separatorView)
@@ -73,7 +94,16 @@ final class ProcessingQueueView: UIView {
       detailContainerView.topAnchor.constraint(equalTo: topAnchor),
       detailContainerView.leadingAnchor.constraint(equalTo: separatorView.trailingAnchor),
       detailContainerView.trailingAnchor.constraint(equalTo: trailingAnchor),
-      detailContainerView.bottomAnchor.constraint(equalTo: bottomAnchor),
+      detailContainerView.bottomAnchor.constraint(equalTo: instructionsSeparatorView.topAnchor),
+
+      instructionsSeparatorView.leadingAnchor.constraint(equalTo: separatorView.trailingAnchor),
+      instructionsSeparatorView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      instructionsSeparatorView.heightAnchor.constraint(equalToConstant: 1),
+
+      instructionsView.topAnchor.constraint(equalTo: instructionsSeparatorView.bottomAnchor),
+      instructionsView.leadingAnchor.constraint(equalTo: separatorView.trailingAnchor),
+      instructionsView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      instructionsView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
       emptyLabel.centerXAnchor.constraint(equalTo: tableView.centerXAnchor),
       emptyLabel.centerYAnchor.constraint(equalTo: tableView.centerYAnchor),
@@ -120,6 +150,10 @@ final class ProcessingQueueView: UIView {
 
   func subtitleIndexFor(rowID: MediaSourceCardCandidateModel.ID) -> Int? {
     rows.first(where: { $0.id == rowID })?.subtitleIndex
+  }
+
+  func setInstructionsText(_ text: String) {
+    instructionsView.setInstructionsText(text)
   }
 
   private func updateEmptyState() {

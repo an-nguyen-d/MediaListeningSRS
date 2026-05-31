@@ -54,15 +54,44 @@ extension MediaListeningSRSDatabaseClient {
             request.subtitleIndexEnd
           ])
 
+          for termID in uniqueTermIDs {
+            try db.execute(sql: """
+              INSERT INTO japaneseTermCardCoverageRecord (japaneseTermID, cardCoverageCount)
+              VALUES (?, 1)
+              ON CONFLICT(japaneseTermID) DO UPDATE SET cardCoverageCount = cardCoverageCount + 1
+            """, arguments: [termID])
+          }
+
+          let coverageThreshold = CandidateValidityFilterService.readCoverageThreshold()
+          try CandidateValidityFilterService.cascadeAutoFilter(
+            changedTermIDs: uniqueTermIDs,
+            coverageThreshold: coverageThreshold,
+            db: db
+          )
+
           return .init(model: GRDBMapper.SRSCard.mapToModel(from: record))
         }
       },
       delete: { request in
         try await databaseWriter.write { db in
+          let termRows = try Row.fetchAll(db, sql: """
+            SELECT japaneseTermID FROM srsCardJapaneseTermLinkRecord WHERE cardID = ?
+          """, arguments: [request.id.rawValue])
+          let termIDs = termRows.compactMap { $0["japaneseTermID"] as Int64? }
+
           let didDelete = try SRSCardRecord.deleteOne(db, key: request.id.rawValue)
           guard didDelete else {
             throw MediaListeningSRSDatabaseError.recordNotFound(id: request.id.rawValue)
           }
+
+          for termID in termIDs {
+            try db.execute(sql: """
+              UPDATE japaneseTermCardCoverageRecord
+              SET cardCoverageCount = MAX(0, cardCoverageCount - 1)
+              WHERE japaneseTermID = ?
+            """, arguments: [termID])
+          }
+
           return .init()
         }
       },
@@ -109,6 +138,7 @@ extension MediaListeningSRSDatabaseClient {
           }
         }
       },
+      // Candidate validity cascade is intentionally not triggered here. See CandidateValidityFilterService.
       recordReview: { request in
         try await databaseWriter.write { db in
           guard var record = try SRSCardRecord.fetchOne(db, key: request.cardID.rawValue) else {

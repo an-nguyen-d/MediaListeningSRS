@@ -45,13 +45,32 @@ extension MediaSourceImportService {
           throw MediaSourceImportError.mediaNotTaggedInMWBT
         }
 
-        // 3. Every non-disabled subtitle index with at least one tagged word becomes a candidate.
+        // 3. Every non-disabled subtitle index with at least one valid tagged word becomes a candidate.
         let disabledIndexes: Set<Int> = Set(mwbtRow.subtitle.disabledIndexes.map { $0.rawValue })
         var termIDsByIndex: [Int: Set<Int64>] = [:]
         for label in mwbtRow.labels {
           let idx = label.subtitleIndex.rawValue
           if disabledIndexes.contains(idx) { continue }
           termIDsByIndex[idx, default: []].insert(label.japaneseTermID.rawValue)
+        }
+
+        guard !termIDsByIndex.isEmpty else {
+          throw MediaSourceImportError.noTaggedNonDisabledSegments
+        }
+
+        // 3b. Filter out segments where every tagged word is invalid (known OR coverage >= threshold).
+        let allTermIDs = Array(Set(termIDsByIndex.values.flatMap { $0 }))
+        let coverageThresholdValue = UserDefaults.standard.integer(
+          forKey: "MSRS.Settings.minimumCardCoverageCount"
+        )
+        let effectiveCoverageThreshold = coverageThresholdValue > 0 ? coverageThresholdValue : 50
+        let invalidResponse = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm
+          .fetchInvalidTermIDs(.init(
+            japaneseTermIDs: allTermIDs,
+            coverageThreshold: effectiveCoverageThreshold
+          ))
+        termIDsByIndex = termIDsByIndex.filter { (_, termIDs) in
+          termIDs.contains { !invalidResponse.invalidTermIDs.contains($0) }
         }
 
         guard !termIDsByIndex.isEmpty else {

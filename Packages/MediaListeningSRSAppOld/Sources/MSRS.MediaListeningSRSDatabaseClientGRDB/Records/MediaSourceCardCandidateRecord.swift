@@ -15,6 +15,7 @@ public struct MediaSourceCardCandidateRecord: Codable, FetchableRecord, MutableP
   /// Set when an SRSCard is created whose subtitle range covers this candidate. Drives the
   /// queue's "move to next item after processing" behavior alongside `isSkipped`.
   public var wasUsedInCard: Bool
+  public var isAutoFiltered: Bool
 
   public mutating func didInsert(_ inserted: InsertionSuccess) {
     id = inserted.rowID

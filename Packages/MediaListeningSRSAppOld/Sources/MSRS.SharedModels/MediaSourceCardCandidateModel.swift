@@ -14,6 +14,7 @@ public struct MediaSourceCardCandidateModel: Identifiable, Sendable, Equatable {
 
   public var isSkipped: Bool
   public var wasUsedInCard: Bool
+  public var isAutoFiltered: Bool
 
   public init(
     id: ID,
@@ -22,7 +23,8 @@ public struct MediaSourceCardCandidateModel: Identifiable, Sendable, Equatable {
     mediaSourceID: MediaSourceModel.ID,
     subtitleIndex: Int,
     isSkipped: Bool,
-    wasUsedInCard: Bool
+    wasUsedInCard: Bool,
+    isAutoFiltered: Bool
   ) {
     self.id = id
     self.createdAt = createdAt
@@ -31,5 +33,6 @@ public struct MediaSourceCardCandidateModel: Identifiable, Sendable, Equatable {
     self.subtitleIndex = subtitleIndex
     self.isSkipped = isSkipped
     self.wasUsedInCard = wasUsedInCard
+    self.isAutoFiltered = isAutoFiltered
   }
 }

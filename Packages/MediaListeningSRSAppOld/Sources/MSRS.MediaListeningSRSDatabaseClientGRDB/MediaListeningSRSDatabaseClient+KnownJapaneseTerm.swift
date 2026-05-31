@@ -24,6 +24,12 @@ extension MediaListeningSRSDatabaseClient {
             )
             try record.insert(db)
           }
+          let coverageThreshold = CandidateValidityFilterService.readCoverageThreshold()
+          try CandidateValidityFilterService.cascadeAutoFilter(
+            changedTermIDs: Set([request.japaneseTermID]),
+            coverageThreshold: coverageThreshold,
+            db: db
+          )
           return .init()
         }
       },
@@ -43,6 +49,17 @@ extension MediaListeningSRSDatabaseClient {
             db: db
           )
           return .init(knownTermIDs: knownSet)
+        }
+      },
+      fetchInvalidTermIDs: { request in
+        try await databaseWriter.read { db in
+          let candidateSet = Set(request.japaneseTermIDs)
+          let invalidTermIDs = try CandidateValidityFilterService.computeInvalidTermIDs(
+            candidateTermIDs: candidateSet,
+            coverageThreshold: request.coverageThreshold,
+            db: db
+          )
+          return .init(invalidTermIDs: invalidTermIDs)
         }
       }
     )
@@ -86,8 +103,8 @@ internal enum KnownJapaneseTermService {
 
     let masteryArgs = StatementArguments(
       candidateTermIDs.map { $0 as DatabaseValueConvertible }
-      + [masteryMinimumCardsCount as DatabaseValueConvertible,
-         masteryMinimumStability as DatabaseValueConvertible]
+      + [masteryMinimumStability as DatabaseValueConvertible,
+         masteryMinimumCardsCount as DatabaseValueConvertible]
     )!
     let masteryRows = try Row.fetchAll(db, sql: """
       SELECT link.japaneseTermID AS termID
@@ -95,7 +112,7 @@ internal enum KnownJapaneseTermService {
       JOIN srsCardRecord card ON card.id = link.cardID
       WHERE link.japaneseTermID IN (\(placeholders))
       GROUP BY link.japaneseTermID
-      HAVING COUNT(card.id) >= ? AND MIN(card.stability) >= ?
+      HAVING COUNT(CASE WHEN card.stability >= ? THEN 1 END) >= ?
     """, arguments: masteryArgs)
     for row in masteryRows {
       if let id: Int64 = row["termID"] {

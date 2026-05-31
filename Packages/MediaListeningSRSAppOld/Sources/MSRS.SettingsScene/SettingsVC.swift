@@ -6,6 +6,7 @@ public final class SettingsVC: UIViewController {
   private let tableView = UITableView(frame: .zero, style: .insetGrouped)
   private var retentionSlider: UISlider?
   private var retentionValueLabel: UILabel?
+  private var coverageThresholdTextField: UITextField?
 
   public init() {
     super.init(nibName: nil, bundle: nil)
@@ -41,6 +42,14 @@ public final class SettingsVC: UIViewController {
     retentionValueLabel?.text = formatRetention(rounded)
   }
 
+  @objc private func coverageThresholdEditingDidEnd(_ sender: UITextField) {
+    let text = sender.text ?? ""
+    let parsed = Int(text) ?? MSRSAppSettings.minimumCardCoverageCountDefault
+    let clamped = max(1, parsed)
+    MSRSAppSettings.minimumCardCoverageCount = clamped
+    sender.text = "\(clamped)"
+  }
+
   private func formatRetention(_ value: Double) -> String {
     "\(Int(value * 100))%"
   }
@@ -48,7 +57,7 @@ public final class SettingsVC: UIViewController {
 
 extension SettingsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 2 }
+  public func numberOfSections(in tableView: UITableView) -> Int { 3 }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 1 }
 
@@ -56,6 +65,7 @@ extension SettingsVC: UITableViewDataSource {
     switch section {
     case 0: return "Processing Queue"
     case 1: return "SRS Scheduling"
+    case 2: return "Candidate Filtering"
     default: return nil
     }
   }
@@ -66,6 +76,8 @@ extension SettingsVC: UITableViewDataSource {
       return "When enabled, a confirmation popup appears before skipping or making a card."
     case 1:
       return "Lower retention = longer intervals between reviews (more aggressive). Higher retention = shorter intervals (more conservative). Default is 90%. Takes effect on the next review of each card."
+    case 2:
+      return "Candidates where all tagged words are either known or already covered by this many cards will be auto-filtered from the processing queue. Only affects new imports and card creations going forward."
     default:
       return nil
     }
@@ -123,6 +135,40 @@ extension SettingsVC: UITableViewDataSource {
         stack.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
         stack.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
         stack.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+      ])
+      return cell
+
+    case 2:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = ""
+
+      let label = UILabel()
+      label.text = "Minimum Card Coverage Count"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+      let textField = UITextField()
+      textField.text = "\(MSRSAppSettings.minimumCardCoverageCount)"
+      textField.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      textField.textAlignment = .right
+      textField.keyboardType = .numberPad
+      textField.borderStyle = .roundedRect
+      textField.widthAnchor.constraint(equalToConstant: 80).isActive = true
+      textField.addTarget(self, action: #selector(coverageThresholdEditingDidEnd(_:)), for: .editingDidEnd)
+      coverageThresholdTextField = textField
+
+      let row = UIStackView(arrangedSubviews: [label, textField])
+      row.axis = .horizontal
+      row.spacing = 12
+      row.alignment = .center
+      row.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(row)
+      NSLayoutConstraint.activate([
+        row.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        row.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        row.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        row.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
       ])
       return cell
 

@@ -59,7 +59,8 @@ internal enum GRDBMapper {
         mediaSourceID: .init(rawValue: record.mediaSourceID),
         subtitleIndex: record.subtitleIndex,
         isSkipped: record.isSkipped,
-        wasUsedInCard: record.wasUsedInCard
+        wasUsedInCard: record.wasUsedInCard,
+        isAutoFiltered: record.isAutoFiltered
       )
     }
   }
