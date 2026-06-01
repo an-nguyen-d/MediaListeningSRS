@@ -5,11 +5,11 @@ import MSRS_SharedModels
 
 extension MediaListeningSRSDatabaseClient {
 
-  internal static func knownJapaneseTermEndpoints(
+  internal static func japaneseTermEndpoints(
     databaseWriter: DatabaseWriter
-  ) -> KnownJapaneseTerm {
+  ) -> JapaneseTerm {
     .init(
-      markAsKnown: { request in
+      markAsFullyKnown: { request in
         try await databaseWriter.write { db in
           let exists = try Int.fetchOne(
             db,
@@ -33,22 +33,31 @@ extension MediaListeningSRSDatabaseClient {
           return .init()
         }
       },
-      isKnown: { request in
+      isFullyKnown: { request in
         try await databaseWriter.read { db in
-          let knownSet = try KnownJapaneseTermService.computeKnownTermIDs(
+          let fullyKnownSet = try FullyKnownTermService.computeFullyKnownTermIDs(
             candidateTermIDs: [request.japaneseTermID],
             db: db
           )
-          return .init(isKnown: knownSet.contains(request.japaneseTermID))
+          return .init(isFullyKnown: fullyKnownSet.contains(request.japaneseTermID))
         }
       },
-      fetchKnownStatusForTermIDs: { request in
+      fetchFullyKnownTermIDs: { request in
         try await databaseWriter.read { db in
-          let knownSet = try KnownJapaneseTermService.computeKnownTermIDs(
+          let fullyKnownSet = try FullyKnownTermService.computeFullyKnownTermIDs(
             candidateTermIDs: Set(request.japaneseTermIDs),
             db: db
           )
-          return .init(knownTermIDs: knownSet)
+          return .init(fullyKnownTermIDs: fullyKnownSet)
+        }
+      },
+      fetchLearnedScoresForTermIDs: { request in
+        try await databaseWriter.read { db in
+          let scores = try LearnedTermService.computeLearnedScores(
+            termIDs: Set(request.japaneseTermIDs),
+            db: db
+          )
+          return .init(scoresByTermID: scores)
         }
       },
       fetchInvalidTermIDs: { request in
@@ -88,59 +97,70 @@ extension MediaListeningSRSDatabaseClient {
   }
 }
 
-// MARK: - KnownJapaneseTermService (the single source of truth)
+// MARK: - FullyKnownTermService
 
-/// All "is this word known?" decisions in the app route through this service.
-/// Do not duplicate the predicate anywhere else.
-internal enum KnownJapaneseTermService {
+/// "Fully Known" = manually marked by the user. Drives candidate filtering.
+internal enum FullyKnownTermService {
 
-  /// Returns the subset of `candidateTermIDs` that are known.
-  ///
-  /// A term is known iff:
-  ///   1. It appears in `knownJapaneseTermRecord` (manually marked), OR
-  ///   2. It has reached SRS mastery: at least `masteryMinimumCardsCount` cards link to it
-  ///      AND every one of those cards has stability >= `masteryMinimumStability`.
-  static func computeKnownTermIDs(
+  static func computeFullyKnownTermIDs(
     candidateTermIDs: Set<Int64>,
     db: Database
   ) throws -> Set<Int64> {
     guard !candidateTermIDs.isEmpty else { return [] }
 
-    let settingsRow = try Row.fetchOne(db, sql: """
-      SELECT masteryMinimumCardsCount, masteryMinimumStability
-      FROM appSettingsRecord
-      ORDER BY id ASC LIMIT 1
-    """)
-    let masteryMinimumCardsCount: Int = settingsRow?["masteryMinimumCardsCount"] ?? 10
-    let masteryMinimumStability: Double = settingsRow?["masteryMinimumStability"] ?? 30
-
     let placeholders = candidateTermIDs.map { _ in "?" }.joined(separator: ",")
-    let manualArgs = StatementArguments(candidateTermIDs.map { $0 as DatabaseValueConvertible })!
+    let args = StatementArguments(candidateTermIDs.map { $0 as DatabaseValueConvertible })!
 
-    let manualRows = try Row.fetchAll(db, sql: """
+    let rows = try Row.fetchAll(db, sql: """
       SELECT japaneseTermID FROM knownJapaneseTermRecord
       WHERE japaneseTermID IN (\(placeholders))
-    """, arguments: manualArgs)
-    var known: Set<Int64> = Set(manualRows.compactMap { $0["japaneseTermID"] as Int64? })
+    """, arguments: args)
+    return Set(rows.compactMap { $0["japaneseTermID"] as Int64? })
+  }
+}
 
-    let masteryArgs = StatementArguments(
-      candidateTermIDs.map { $0 as DatabaseValueConvertible }
-      + [masteryMinimumStability as DatabaseValueConvertible,
-         masteryMinimumCardsCount as DatabaseValueConvertible]
-    )!
-    let masteryRows = try Row.fetchAll(db, sql: """
-      SELECT link.japaneseTermID AS termID
-      FROM srsCardJapaneseTermLinkRecord link
-      JOIN srsCardRecord card ON card.id = link.cardID
-      WHERE link.japaneseTermID IN (\(placeholders))
-      GROUP BY link.japaneseTermID
-      HAVING COUNT(CASE WHEN card.stability >= ? THEN 1 END) >= ?
-    """, arguments: masteryArgs)
-    for row in masteryRows {
-      if let id: Int64 = row["termID"] {
-        known.insert(id)
-      }
+// MARK: - LearnedTermService
+
+/// "Learned" = SRS-driven passive vocabulary score (0→1).
+/// score = min(1, sum(min(stability, 365) for top 100 cards by stability) / 365)
+internal enum LearnedTermService {
+
+  private static let stabilityCap: Double = 365
+  private static let targetSum: Double = 365
+  private static let maxCardsPerTerm: Int = 100
+
+  static func computeLearnedScores(
+    termIDs: Set<Int64>,
+    db: Database
+  ) throws -> [Int64: Double] {
+    guard !termIDs.isEmpty else { return [:] }
+
+    let placeholders = termIDs.map { _ in "?" }.joined(separator: ",")
+    let args = StatementArguments(termIDs.map { $0 as DatabaseValueConvertible })!
+
+    let rows = try Row.fetchAll(db, sql: """
+      SELECT japaneseTermID, SUM(cappedStability) AS stabilitySum
+      FROM (
+        SELECT link.japaneseTermID,
+               MIN(card.stability, \(stabilityCap)) AS cappedStability,
+               ROW_NUMBER() OVER (
+                 PARTITION BY link.japaneseTermID
+                 ORDER BY card.stability DESC
+               ) AS rn
+        FROM srsCardJapaneseTermLinkRecord link
+        JOIN srsCardRecord card ON card.id = link.cardID
+        WHERE link.japaneseTermID IN (\(placeholders))
+      )
+      WHERE rn <= \(maxCardsPerTerm)
+      GROUP BY japaneseTermID
+    """, arguments: args)
+
+    var scores: [Int64: Double] = [:]
+    for row in rows {
+      guard let termID: Int64 = row["japaneseTermID"],
+            let sum: Double = row["stabilitySum"] else { continue }
+      scores[termID] = min(1.0, sum / targetSum)
     }
-    return known
+    return scores
   }
 }

@@ -41,7 +41,7 @@ extension MediaListeningSRSDatabaseClient {
       mediaSource: Self.mediaSourceEndpoints(databaseWriter: databaseWriter),
       mediaSourceCardCandidate: Self.mediaSourceCardCandidateEndpoints(databaseWriter: databaseWriter),
       srsCard: Self.srsCardEndpoints(databaseWriter: databaseWriter, fsrsParameters: fsrsParameters),
-      knownJapaneseTerm: Self.knownJapaneseTermEndpoints(databaseWriter: databaseWriter)
+      japaneseTerm: Self.japaneseTermEndpoints(databaseWriter: databaseWriter)
     )
   }
 
@@ -112,7 +112,7 @@ extension MediaListeningSRSDatabaseClient {
                     on: "mediaSourceCardCandidateJapaneseTermLinkRecord",
                     columns: ["japaneseTermID"])
 
-      // Many-to-many: card → words. Drives the mastery-count side of `KnownJapaneseTermService`.
+      // Many-to-many: card → words. Drives `LearnedTermService` score computation.
       try db.create(table: "srsCardJapaneseTermLinkRecord") { t in
         t.autoIncrementedPrimaryKey("id")
         t.column("cardID", .integer)
@@ -140,7 +140,7 @@ extension MediaListeningSRSDatabaseClient {
                     on: "srsReviewEventRecord",
                     columns: ["cardID"])
 
-      // Single-row settings table — mastery thresholds for `KnownJapaneseTermService`.
+      // Single-row settings table (legacy mastery thresholds, no longer used by new scoring).
       try db.create(table: "appSettingsRecord") { t in
         t.autoIncrementedPrimaryKey("id")
         t.column("masteryMinimumCardsCount", .integer).notNull().defaults(to: 10)

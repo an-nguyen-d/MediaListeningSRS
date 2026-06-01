@@ -11,19 +11,19 @@ public enum WordsListModels {
     case mostKnown = "Most Known"
   }
 
-  public enum KnownFilter: String, CaseIterable, Sendable {
+  public enum FullyKnownFilter: String, CaseIterable, Sendable {
     case all = "All"
-    case knownOnly = "Known"
-    case unknownOnly = "Unknown"
+    case fullyKnownOnly = "Fully Known"
+    case notFullyKnown = "Not Fully Known"
   }
 
   public enum Action {
     case viewDidLoad
     case loadNextPage
     case sortChanged(SortField)
-    case knownFilterChanged(KnownFilter)
+    case fullyKnownFilterChanged(FullyKnownFilter)
     case searchQueryChanged(String)
-    case markTermAsKnown(termID: Int64)
+    case markTermAsFullyKnown(termID: Int64)
   }
 
   public struct WordRow: Sendable {
@@ -33,7 +33,8 @@ public enum WordsListModels {
     public let primarySpelling: String
     public let reading: String
     public let definitionSummary: String
-    public let isKnown: Bool
+    public let isFullyKnown: Bool
+    public let learnedScore: Double
     public let cardCoverageCount: Int
   }
 
@@ -43,7 +44,7 @@ public enum WordsListModels {
     public let hasMorePages: Bool
     public let totalLoaded: Int
     public let activeSortField: SortField
-    public let activeKnownFilter: KnownFilter
+    public let activeFullyKnownFilter: FullyKnownFilter
     public let searchQuery: String
   }
 }

@@ -3,14 +3,12 @@ import UIKit
 public struct HighlightableTranscriptLabeledRange: Equatable, Sendable {
   public let range: NSRange
   public let termID: Int64
-  /// True if the word is "known" per `KnownJapaneseTermService` — drives a different overlay color
-  /// so the reader can spot what's already mastered vs. still being learned.
-  public let isKnown: Bool
+  public let isFullyKnown: Bool
 
-  public init(range: NSRange, termID: Int64, isKnown: Bool = false) {
+  public init(range: NSRange, termID: Int64, isFullyKnown: Bool = false) {
     self.range = range
     self.termID = termID
-    self.isKnown = isKnown
+    self.isFullyKnown = isFullyKnown
   }
 }
 
@@ -199,7 +197,7 @@ public final class HighlightableTranscriptView: UITextView {
           shapeLayer.fillColor = self.selectedHighlightFillColor.cgColor
           shapeLayer.strokeColor = self.selectedHighlightBorderColor.cgColor
           shapeLayer.lineWidth = self.highlightBorderWidth + 1
-        } else if labeled.isKnown {
+        } else if labeled.isFullyKnown {
           shapeLayer.fillColor = self.knownHighlightFillColor.cgColor
           shapeLayer.strokeColor = self.knownHighlightBorderColor.cgColor
           shapeLayer.lineWidth = self.highlightBorderWidth

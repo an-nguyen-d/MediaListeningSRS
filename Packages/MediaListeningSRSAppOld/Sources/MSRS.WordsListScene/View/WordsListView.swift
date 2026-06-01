@@ -3,21 +3,22 @@ import UIKit
 final class WordsListView: UIView {
 
   var onSortChanged: ((WordsListModels.SortField) -> Void)?
-  var onKnownFilterChanged: ((WordsListModels.KnownFilter) -> Void)?
+  var onFullyKnownFilterChanged: ((WordsListModels.FullyKnownFilter) -> Void)?
   var onSearchQueryChanged: ((String) -> Void)?
   var onScrolledNearBottom: (() -> Void)?
-  var onMarkAsKnownTapped: ((Int64) -> Void)?
+  var onMarkAsFullyKnownTapped: ((Int64) -> Void)?
 
   static let columnPosition: CGFloat = 60
   static let columnFrequencyRank: CGFloat = 90
   static let columnSpelling: CGFloat = 260
   static let columnReading: CGFloat = 260
   static let columnKnown: CGFloat = 120
+  static let columnLearned: CGFloat = 100
   static let columnCoverage: CGFloat = 110
 
   private let toolbarContainer = UIView()
   private let sortSegmentedControl = UISegmentedControl(items: WordsListModels.SortField.allCases.map(\.rawValue))
-  private let filterSegmentedControl = UISegmentedControl(items: WordsListModels.KnownFilter.allCases.map(\.rawValue))
+  private let filterSegmentedControl = UISegmentedControl(items: WordsListModels.FullyKnownFilter.allCases.map(\.rawValue))
   private let searchField = UISearchTextField()
   private let statsLabel = UILabel()
 
@@ -125,7 +126,8 @@ final class WordsListView: UIView {
       ("Spelling", Self.columnSpelling, .left),
       ("Reading", Self.columnReading, .left),
       ("Definition", 0, .left),
-      ("Known", Self.columnKnown, .center),
+      ("Fully Known", Self.columnKnown, .center),
+      ("Learned", Self.columnLearned, .right),
       ("Cards", Self.columnCoverage, .right),
     ]
 
@@ -196,8 +198,8 @@ final class WordsListView: UIView {
   func setViewModel(_ viewModel: WordsListModels.ViewModel) {
     rows = viewModel.rows
     hasMorePages = viewModel.hasMorePages
-    let knownCount = viewModel.rows.filter(\.isKnown).count
-    statsLabel.text = "\(viewModel.totalLoaded) loaded · \(knownCount) known"
+    let fullyKnownCount = viewModel.rows.filter(\.isFullyKnown).count
+    statsLabel.text = "\(viewModel.totalLoaded) loaded · \(fullyKnownCount) fully known"
     tableView.reloadData()
   }
 
@@ -210,9 +212,9 @@ final class WordsListView: UIView {
   }
 
   @objc private func filterChanged() {
-    let filters = WordsListModels.KnownFilter.allCases
+    let filters = WordsListModels.FullyKnownFilter.allCases
     guard filterSegmentedControl.selectedSegmentIndex < filters.count else { return }
-    onKnownFilterChanged?(filters[filterSegmentedControl.selectedSegmentIndex])
+    onFullyKnownFilterChanged?(filters[filterSegmentedControl.selectedSegmentIndex])
   }
 
   @objc private func searchFieldChanged() {
@@ -235,8 +237,8 @@ extension WordsListView: UITableViewDataSource {
     ) as! WordsListRowCell
     let row = rows[indexPath.row]
     cell.configure(with: row)
-    cell.onMarkAsKnownTapped = { [weak self] termID in
-      self?.onMarkAsKnownTapped?(termID)
+    cell.onMarkAsFullyKnownTapped = { [weak self] termID in
+      self?.onMarkAsFullyKnownTapped?(termID)
     }
     return cell
   }
@@ -263,12 +265,12 @@ extension WordsListView: UITableViewDelegate {
     let row = rows[indexPath.row]
     return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
       var actions: [UIAction] = []
-      if !row.isKnown {
+      if !row.isFullyKnown {
         actions.append(UIAction(
-          title: "Mark as Known",
+          title: "Mark as Fully Known",
           image: UIImage(systemName: "checkmark.circle")
         ) { _ in
-          self?.onMarkAsKnownTapped?(row.termID)
+          self?.onMarkAsFullyKnownTapped?(row.termID)
         })
       }
       actions.append(UIAction(
@@ -288,7 +290,7 @@ final class WordsListRowCell: UITableViewCell {
 
   static let reuseIdentifier = "WordsListRowCell"
 
-  var onMarkAsKnownTapped: ((Int64) -> Void)?
+  var onMarkAsFullyKnownTapped: ((Int64) -> Void)?
 
   private let positionLabel = UILabel()
   private let frequencyRankLabel = UILabel()
@@ -296,6 +298,7 @@ final class WordsListRowCell: UITableViewCell {
   private let readingLabel = UILabel()
   private let definitionLabel = UILabel()
   private let knownButton = UIButton(type: .system)
+  private let learnedLabel = UILabel()
   private let coverageLabel = UILabel()
   private let rowStack = UIStackView()
   private var currentTermID: Int64 = 0
@@ -344,6 +347,11 @@ final class WordsListRowCell: UITableViewCell {
     knownButton.widthAnchor.constraint(equalToConstant: WordsListView.columnKnown).isActive = true
     knownButton.addTarget(self, action: #selector(knownButtonTapped), for: .touchUpInside)
 
+    learnedLabel.font = .monospacedDigitSystemFont(ofSize: 22, weight: .regular)
+    learnedLabel.textAlignment = .right
+    learnedLabel.translatesAutoresizingMaskIntoConstraints = false
+    learnedLabel.widthAnchor.constraint(equalToConstant: WordsListView.columnLearned).isActive = true
+
     coverageLabel.font = .monospacedDigitSystemFont(ofSize: 22, weight: .regular)
     coverageLabel.textColor = .secondaryLabel
     coverageLabel.textAlignment = .right
@@ -361,6 +369,7 @@ final class WordsListRowCell: UITableViewCell {
     rowStack.addArrangedSubview(readingLabel)
     rowStack.addArrangedSubview(definitionLabel)
     rowStack.addArrangedSubview(knownButton)
+    rowStack.addArrangedSubview(learnedLabel)
     rowStack.addArrangedSubview(coverageLabel)
 
     contentView.addSubview(rowStack)
@@ -380,8 +389,8 @@ final class WordsListRowCell: UITableViewCell {
     readingLabel.text = row.reading
     definitionLabel.text = row.definitionSummary
 
-    if row.isKnown {
-      knownButton.setTitle("✓ Known", for: .normal)
+    if row.isFullyKnown {
+      knownButton.setTitle("✓ Fully Known", for: .normal)
       knownButton.setTitleColor(.systemGreen, for: .normal)
       knownButton.isEnabled = false
     } else {
@@ -390,10 +399,19 @@ final class WordsListRowCell: UITableViewCell {
       knownButton.isEnabled = true
     }
 
+    if row.learnedScore > 0 {
+      let pct = Int(round(row.learnedScore * 100))
+      learnedLabel.text = "\(pct)%"
+      learnedLabel.textColor = row.learnedScore >= 1.0 ? .systemGreen : .secondaryLabel
+    } else {
+      learnedLabel.text = "—"
+      learnedLabel.textColor = .tertiaryLabel
+    }
+
     coverageLabel.text = row.cardCoverageCount > 0 ? "\(row.cardCoverageCount)" : "—"
   }
 
   @objc private func knownButtonTapped() {
-    onMarkAsKnownTapped?(currentTermID)
+    onMarkAsFullyKnownTapped?(currentTermID)
   }
 }

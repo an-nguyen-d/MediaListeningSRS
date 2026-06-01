@@ -1,11 +1,6 @@
 import Foundation
 import GRDB
 
-// SRS reviews are explicitly NOT a cascade trigger. Reviews happen too frequently
-// (potentially hundreds per session) and mastery status changes are rare relative to
-// review volume. Mastery-based filtering is picked up at the next card-creation or
-// mark-as-known event, which is sufficient.
-
 internal enum CandidateValidityFilterService {
 
   private static let coverageThresholdUserDefaultsKey = "MSRS.Settings.minimumCardCoverageCount"
@@ -23,7 +18,7 @@ internal enum CandidateValidityFilterService {
   ) throws -> Set<Int64> {
     guard !candidateTermIDs.isEmpty else { return [] }
 
-    var invalid = try KnownJapaneseTermService.computeKnownTermIDs(
+    var invalid = try FullyKnownTermService.computeFullyKnownTermIDs(
       candidateTermIDs: candidateTermIDs,
       db: db
     )

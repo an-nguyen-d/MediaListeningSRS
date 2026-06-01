@@ -34,8 +34,8 @@ public final class WordsListVC: UIViewController, WordsListDisplayer {
     contentView.onSortChanged = { [weak self] field in
       self?.interactor.sendAction(.sortChanged(field))
     }
-    contentView.onKnownFilterChanged = { [weak self] filter in
-      self?.interactor.sendAction(.knownFilterChanged(filter))
+    contentView.onFullyKnownFilterChanged = { [weak self] filter in
+      self?.interactor.sendAction(.fullyKnownFilterChanged(filter))
     }
     contentView.onSearchQueryChanged = { [weak self] query in
       self?.interactor.sendAction(.searchQueryChanged(query))
@@ -43,8 +43,8 @@ public final class WordsListVC: UIViewController, WordsListDisplayer {
     contentView.onScrolledNearBottom = { [weak self] in
       self?.interactor.sendAction(.loadNextPage)
     }
-    contentView.onMarkAsKnownTapped = { [weak self] termID in
-      self?.interactor.sendAction(.markTermAsKnown(termID: termID))
+    contentView.onMarkAsFullyKnownTapped = { [weak self] termID in
+      self?.interactor.sendAction(.markTermAsFullyKnown(termID: termID))
     }
 
     interactor.sendAction(.viewDidLoad)

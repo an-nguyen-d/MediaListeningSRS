@@ -35,7 +35,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
   private var subtitleSegmentsByIndex: [Int: SubtitleSegment] = [:]
   private var labelsBySubtitleIndex: [Int: [JapaneseTermLabelModel]] = [:]
   private var englishTranslationsByIndex: [Int: String] = [:]
-  private var knownTermIDs: Set<Int64> = []
+  private var fullyKnownTermIDs: Set<Int64> = []
   private var maxIndex: Int = 0
   private var startSubtitleIndex: Int = 0
   private var endSubtitleIndex: Int = 0
@@ -81,8 +81,8 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
       emitViewModel()
     case .termTapped(let termID):
       handleTermTapped(termID)
-    case .markTermAsKnown(let termID):
-      handleMarkTermAsKnown(termID)
+    case .markTermAsFullyKnown(let termID):
+      handleMarkTermAsFullyKnown(termID)
     case .skipTapped:
       handleSkipTapped()
     case .confirmTapped:
@@ -90,14 +90,14 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
     }
   }
 
-  private func handleMarkTermAsKnown(_ termID: Int64) {
+  private func handleMarkTermAsFullyKnown(_ termID: Int64) {
     Task { [mediaListeningSRSDatabaseClient, presenter] in
       do {
-        _ = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm.markAsKnown(
+        _ = try await mediaListeningSRSDatabaseClient.japaneseTerm.markAsFullyKnown(
           .init(japaneseTermID: termID)
         )
         await MainActor.run {
-          self.knownTermIDs.insert(termID)
+          self.fullyKnownTermIDs.insert(termID)
           self.emitViewModel()
         }
       } catch {
@@ -167,10 +167,9 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
           }
         }
 
-        // Pre-fetch known-status for every tagged word across the source — one batch query
-        // through the SINGLE source-of-truth (`KnownJapaneseTermService.computeKnownTermIDs`).
+        // Pre-fetch fully-known status for every tagged word across the source.
         let allTermIDs = Set(labelsBySubtitleIndex.values.flatMap { $0 }.map { $0.japaneseTermID.rawValue })
-        let knownResp = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm.fetchKnownStatusForTermIDs(
+        let knownResp = try await mediaListeningSRSDatabaseClient.japaneseTerm.fetchFullyKnownTermIDs(
           .init(japaneseTermIDs: Array(allTermIDs))
         )
 
@@ -179,7 +178,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
           self.subtitleSegmentsByIndex = segmentsByIndex
           self.labelsBySubtitleIndex = labelsBySubtitleIndex
           self.englishTranslationsByIndex = translationsByIndex
-          self.knownTermIDs = knownResp.knownTermIDs
+          self.fullyKnownTermIDs = knownResp.fullyKnownTermIDs
           self.maxIndex = maxIndex
           self.startSubtitleIndex = candidate.subtitleIndex
           self.endSubtitleIndex = candidate.subtitleIndex
@@ -216,14 +215,14 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
           return
         }
         let viewModel = IYomiDictionaryViewModelBridge.makeLookupViewModel(from: lookup)
-        let isKnownResp = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm.isKnown(
+        let isKnownResp = try await mediaListeningSRSDatabaseClient.japaneseTerm.isFullyKnown(
           .init(japaneseTermID: termID)
         )
         await MainActor.run {
           presenter.presentDictionaryLookup(.init(
             japaneseTermID: termID,
             viewModel: viewModel,
-            isAlreadyKnown: isKnownResp.isKnown
+            isAlreadyFullyKnown: isKnownResp.isFullyKnown
           ))
         }
       } catch {
@@ -328,7 +327,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
             length: length
           ),
           termID: termIDValue,
-          isKnown: knownTermIDs.contains(termIDValue)
+          isFullyKnown: fullyKnownTermIDs.contains(termIDValue)
         ))
       }
       joinedParts.append(text)

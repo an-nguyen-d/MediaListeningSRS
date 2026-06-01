@@ -317,18 +317,18 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
   }
   public var srsCard: SRSCard
 
-  // MARK: - KnownJapaneseTerm
+  // MARK: - JapaneseTerm
   //
-  // Single source of truth for "is this word known". A word is known iff:
-  //   (a) it has been manually marked as known by the user, OR
-  //   (b) it has reached SRS mastery: at least `masteryMinimumCardsCount` cards linked to it,
-  //       each with stability >= `masteryMinimumStability`.
-  //
-  // DO NOT duplicate the known-decision logic anywhere else in the codebase.
+  // Two levels of word knowledge:
+  //   - "Fully Known": manually marked by the user ("I know everything about this word").
+  //     Drives candidate filtering — fully-known terms are invalid for new candidates.
+  //   - "Learned": SRS-driven passive vocabulary score (0→1).
+  //     score = min(1, sum(min(stability, 365) for top 100 cards) / 365).
+  //     Informational only — does not affect candidate filtering.
 
-  public struct KnownJapaneseTerm: Sendable {
+  public struct JapaneseTerm: Sendable {
 
-    public enum MarkAsKnown {
+    public enum MarkAsFullyKnown {
       public struct Request: Sendable {
         public let japaneseTermID: Int64
         public init(japaneseTermID: Int64) {
@@ -340,18 +340,18 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
     }
 
-    public enum IsKnown {
+    public enum IsFullyKnown {
       public struct Request: Sendable {
         public let japaneseTermID: Int64
         public init(japaneseTermID: Int64) { self.japaneseTermID = japaneseTermID }
       }
       public struct Response: Sendable, Equatable {
-        public let isKnown: Bool
-        public init(isKnown: Bool) { self.isKnown = isKnown }
+        public let isFullyKnown: Bool
+        public init(isFullyKnown: Bool) { self.isFullyKnown = isFullyKnown }
       }
     }
 
-    public enum FetchKnownStatusForTermIDs {
+    public enum FetchFullyKnownTermIDs {
       public struct Request: Sendable {
         public let japaneseTermIDs: [Int64]
         public init(japaneseTermIDs: [Int64]) {
@@ -359,9 +359,24 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
         }
       }
       public struct Response: Sendable, Equatable {
-        public let knownTermIDs: Set<Int64>
-        public init(knownTermIDs: Set<Int64>) {
-          self.knownTermIDs = knownTermIDs
+        public let fullyKnownTermIDs: Set<Int64>
+        public init(fullyKnownTermIDs: Set<Int64>) {
+          self.fullyKnownTermIDs = fullyKnownTermIDs
+        }
+      }
+    }
+
+    public enum FetchLearnedScoresForTermIDs {
+      public struct Request: Sendable {
+        public let japaneseTermIDs: [Int64]
+        public init(japaneseTermIDs: [Int64]) {
+          self.japaneseTermIDs = japaneseTermIDs
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public let scoresByTermID: [Int64: Double]
+        public init(scoresByTermID: [Int64: Double]) {
+          self.scoresByTermID = scoresByTermID
         }
       }
     }
@@ -398,37 +413,40 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
     }
 
-    public var markAsKnown: @Sendable (MarkAsKnown.Request) async throws -> MarkAsKnown.Response
-    public var isKnown: @Sendable (IsKnown.Request) async throws -> IsKnown.Response
-    public var fetchKnownStatusForTermIDs: @Sendable (FetchKnownStatusForTermIDs.Request) async throws -> FetchKnownStatusForTermIDs.Response
+    public var markAsFullyKnown: @Sendable (MarkAsFullyKnown.Request) async throws -> MarkAsFullyKnown.Response
+    public var isFullyKnown: @Sendable (IsFullyKnown.Request) async throws -> IsFullyKnown.Response
+    public var fetchFullyKnownTermIDs: @Sendable (FetchFullyKnownTermIDs.Request) async throws -> FetchFullyKnownTermIDs.Response
+    public var fetchLearnedScoresForTermIDs: @Sendable (FetchLearnedScoresForTermIDs.Request) async throws -> FetchLearnedScoresForTermIDs.Response
     public var fetchInvalidTermIDs: @Sendable (FetchInvalidTermIDs.Request) async throws -> FetchInvalidTermIDs.Response
     public var fetchCoverageCountsForTermIDs: @Sendable (FetchCoverageCountsForTermIDs.Request) async throws -> FetchCoverageCountsForTermIDs.Response
 
     public init(
-      markAsKnown: @Sendable @escaping (MarkAsKnown.Request) async throws -> MarkAsKnown.Response,
-      isKnown: @Sendable @escaping (IsKnown.Request) async throws -> IsKnown.Response,
-      fetchKnownStatusForTermIDs: @Sendable @escaping (FetchKnownStatusForTermIDs.Request) async throws -> FetchKnownStatusForTermIDs.Response,
+      markAsFullyKnown: @Sendable @escaping (MarkAsFullyKnown.Request) async throws -> MarkAsFullyKnown.Response,
+      isFullyKnown: @Sendable @escaping (IsFullyKnown.Request) async throws -> IsFullyKnown.Response,
+      fetchFullyKnownTermIDs: @Sendable @escaping (FetchFullyKnownTermIDs.Request) async throws -> FetchFullyKnownTermIDs.Response,
+      fetchLearnedScoresForTermIDs: @Sendable @escaping (FetchLearnedScoresForTermIDs.Request) async throws -> FetchLearnedScoresForTermIDs.Response,
       fetchInvalidTermIDs: @Sendable @escaping (FetchInvalidTermIDs.Request) async throws -> FetchInvalidTermIDs.Response,
       fetchCoverageCountsForTermIDs: @Sendable @escaping (FetchCoverageCountsForTermIDs.Request) async throws -> FetchCoverageCountsForTermIDs.Response
     ) {
-      self.markAsKnown = markAsKnown
-      self.isKnown = isKnown
-      self.fetchKnownStatusForTermIDs = fetchKnownStatusForTermIDs
+      self.markAsFullyKnown = markAsFullyKnown
+      self.isFullyKnown = isFullyKnown
+      self.fetchFullyKnownTermIDs = fetchFullyKnownTermIDs
+      self.fetchLearnedScoresForTermIDs = fetchLearnedScoresForTermIDs
       self.fetchInvalidTermIDs = fetchInvalidTermIDs
       self.fetchCoverageCountsForTermIDs = fetchCoverageCountsForTermIDs
     }
   }
-  public var knownJapaneseTerm: KnownJapaneseTerm
+  public var japaneseTerm: JapaneseTerm
 
   public init(
     mediaSource: MediaSource,
     mediaSourceCardCandidate: MediaSourceCardCandidate,
     srsCard: SRSCard,
-    knownJapaneseTerm: KnownJapaneseTerm
+    japaneseTerm: JapaneseTerm
   ) {
     self.mediaSource = mediaSource
     self.mediaSourceCardCandidate = mediaSourceCardCandidate
     self.srsCard = srsCard
-    self.knownJapaneseTerm = knownJapaneseTerm
+    self.japaneseTerm = japaneseTerm
   }
 }

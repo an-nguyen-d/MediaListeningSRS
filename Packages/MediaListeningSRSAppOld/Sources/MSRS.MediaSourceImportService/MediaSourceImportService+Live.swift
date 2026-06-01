@@ -64,7 +64,7 @@ extension MediaSourceImportService {
           forKey: "MSRS.Settings.minimumCardCoverageCount"
         )
         let effectiveCoverageThreshold = coverageThresholdValue > 0 ? coverageThresholdValue : 50
-        let invalidResponse = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm
+        let invalidResponse = try await mediaListeningSRSDatabaseClient.japaneseTerm
           .fetchInvalidTermIDs(.init(
             japaneseTermIDs: allTermIDs,
             coverageThreshold: effectiveCoverageThreshold

@@ -454,10 +454,9 @@ final class SRSCardReviewView: UIView {
 
   func revealBack() {
     isShowingBack = true
-    stopPlayback()
-    applyVideoStageVisibility()
     frontContainer.isHidden = true
     backContainer.isHidden = false
+    playFromStart()
   }
 
   func replay() {

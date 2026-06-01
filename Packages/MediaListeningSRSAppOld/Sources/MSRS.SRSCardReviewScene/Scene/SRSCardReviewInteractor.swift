@@ -37,7 +37,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     let mwbtLabelsBySubtitleIndex: [Int: [JapaneseTermLabelModel]]
   }
   private var sourceCachesByID: [MediaSourceModel.ID: SourceCache] = [:]
-  private var knownTermIDs: Set<Int64> = []
+  private var fullyKnownTermIDs: Set<Int64> = []
 
   init(
     presenter: SRSCardReviewPresenter,
@@ -67,8 +67,8 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       presenter.presentReplay()
     case .termTapped(let termID):
       handleTermTapped(termID)
-    case .markTermAsKnown(let termID):
-      handleMarkTermAsKnown(termID)
+    case .markTermAsFullyKnown(let termID):
+      handleMarkTermAsFullyKnown(termID)
     case .gradedAndNext(let grade):
       handleGraded(grade)
     case .frontVideoVisibilityChanged(let visibility):
@@ -78,14 +78,14 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     }
   }
 
-  private func handleMarkTermAsKnown(_ termID: Int64) {
+  private func handleMarkTermAsFullyKnown(_ termID: Int64) {
     Task { [mediaListeningSRSDatabaseClient, presenter] in
       do {
-        _ = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm.markAsKnown(
+        _ = try await mediaListeningSRSDatabaseClient.japaneseTerm.markAsFullyKnown(
           .init(japaneseTermID: termID)
         )
         await MainActor.run {
-          self.knownTermIDs.insert(termID)
+          self.fullyKnownTermIDs.insert(termID)
           self.emitCurrentCard()
         }
       } catch {
@@ -179,14 +179,14 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
           return
         }
         let viewModel = IYomiDictionaryViewModelBridge.makeLookupViewModel(from: lookup)
-        let isKnownResp = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm.isKnown(
+        let isKnownResp = try await mediaListeningSRSDatabaseClient.japaneseTerm.isFullyKnown(
           .init(japaneseTermID: termID)
         )
         await MainActor.run {
           presenter.presentDictionaryLookup(.init(
             japaneseTermID: termID,
             viewModel: viewModel,
-            isAlreadyKnown: isKnownResp.isKnown
+            isAlreadyFullyKnown: isKnownResp.isFullyKnown
           ))
         }
       } catch {
@@ -238,7 +238,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
             length: length
           ),
           termID: termIDValue,
-          isKnown: knownTermIDs.contains(termIDValue)
+          isFullyKnown: fullyKnownTermIDs.contains(termIDValue)
         ))
       }
       joinedParts.append(text)
@@ -300,13 +300,13 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
 
     // Merge any newly-relevant known IDs into the global cache (single source of truth).
     let allTermIDs = Set(labelsBySubtitleIndex.values.flatMap { $0 }.map { $0.japaneseTermID.rawValue })
-    let knownResp = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm.fetchKnownStatusForTermIDs(
+    let knownResp = try await mediaListeningSRSDatabaseClient.japaneseTerm.fetchFullyKnownTermIDs(
       .init(japaneseTermIDs: Array(allTermIDs))
     )
 
     await MainActor.run {
       self.sourceCachesByID[mediaSourceID] = cache
-      self.knownTermIDs.formUnion(knownResp.knownTermIDs)
+      self.fullyKnownTermIDs.formUnion(knownResp.fullyKnownTermIDs)
     }
     return cache
   }

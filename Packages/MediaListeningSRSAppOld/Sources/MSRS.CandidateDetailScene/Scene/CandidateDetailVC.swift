@@ -125,9 +125,9 @@ public final class CandidateDetailVC: UIViewController, CandidateDetailDisplayer
     popup.show(
       viewModel: result.viewModel,
       tappedWordFrame: tappedWordFrame,
-      isAlreadyKnown: result.isAlreadyKnown,
-      onMarkAsKnownTapped: { [weak self] in
-        self?.interactor.sendAction(.markTermAsKnown(result.japaneseTermID))
+      isAlreadyFullyKnown: result.isAlreadyFullyKnown,
+      onMarkAsFullyKnownTapped: { [weak self] in
+        self?.interactor.sendAction(.markTermAsFullyKnown(result.japaneseTermID))
       },
       onDismiss: { [weak self] in
         self?.contentView.setSelectedTermID(nil)

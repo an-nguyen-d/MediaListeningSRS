@@ -14,13 +14,14 @@ final class WordsListInteractor {
   private static let pageSize = 100
 
   private var allLoadedResults: [DictionaryLookupResult] = []
-  private var knownTermIDs: Set<Int64> = []
+  private var fullyKnownTermIDs: Set<Int64> = []
+  private var learnedScoresByTermID: [Int64: Double] = [:]
   private var coverageCountsByTermID: [Int64: Int] = [:]
   private var currentOffset = 0
   private var hasMorePages = true
   private var isLoading = false
   private var activeSortField: WordsListModels.SortField = .frequencyRank
-  private var activeKnownFilter: WordsListModels.KnownFilter = .all
+  private var activeFullyKnownFilter: WordsListModels.FullyKnownFilter = .all
   private var searchQuery: String = ""
   private var searchDebounceTask: Task<Void, Never>?
 
@@ -43,8 +44,8 @@ final class WordsListInteractor {
     case .sortChanged(let field):
       activeSortField = field
       resetAndReload()
-    case .knownFilterChanged(let filter):
-      activeKnownFilter = filter
+    case .fullyKnownFilterChanged(let filter):
+      activeFullyKnownFilter = filter
       emitViewModel()
     case .searchQueryChanged(let query):
       searchDebounceTask?.cancel()
@@ -54,14 +55,15 @@ final class WordsListInteractor {
         self.searchQuery = query
         self.resetAndReload()
       }
-    case .markTermAsKnown(let termID):
-      handleMarkTermAsKnown(termID)
+    case .markTermAsFullyKnown(let termID):
+      handleMarkTermAsFullyKnown(termID)
     }
   }
 
   private func resetAndReload() {
     allLoadedResults = []
-    knownTermIDs = []
+    fullyKnownTermIDs = []
+    learnedScoresByTermID = [:]
     coverageCountsByTermID = [:]
     currentOffset = 0
     hasMorePages = true
@@ -98,15 +100,19 @@ final class WordsListInteractor {
 
         let termIDs = results.map { $0.termID.rawValue }
 
-        let knownResponse = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm
-          .fetchKnownStatusForTermIDs(.init(japaneseTermIDs: termIDs))
+        let knownResponse = try await mediaListeningSRSDatabaseClient.japaneseTerm
+          .fetchFullyKnownTermIDs(.init(japaneseTermIDs: termIDs))
 
-        let coverageResponse = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm
+        let learnedResponse = try await mediaListeningSRSDatabaseClient.japaneseTerm
+          .fetchLearnedScoresForTermIDs(.init(japaneseTermIDs: termIDs))
+
+        let coverageResponse = try await mediaListeningSRSDatabaseClient.japaneseTerm
           .fetchCoverageCountsForTermIDs(.init(japaneseTermIDs: termIDs))
 
         await MainActor.run {
           self.allLoadedResults.append(contentsOf: results)
-          self.knownTermIDs.formUnion(knownResponse.knownTermIDs)
+          self.fullyKnownTermIDs.formUnion(knownResponse.fullyKnownTermIDs)
+          self.learnedScoresByTermID.merge(learnedResponse.scoresByTermID) { _, new in new }
           self.coverageCountsByTermID.merge(coverageResponse.coverageCountsByTermID) { _, new in new }
           self.currentOffset += results.count
           self.hasMorePages = results.count >= Self.pageSize
@@ -123,19 +129,20 @@ final class WordsListInteractor {
     }
   }
 
-  private func handleMarkTermAsKnown(_ termID: Int64) {
+  private func handleMarkTermAsFullyKnown(_ termID: Int64) {
     Task { [mediaListeningSRSDatabaseClient] in
       do {
-        _ = try await mediaListeningSRSDatabaseClient.knownJapaneseTerm.markAsKnown(
+        _ = try await mediaListeningSRSDatabaseClient.japaneseTerm.markAsFullyKnown(
           .init(japaneseTermID: termID)
         )
         await MainActor.run {
-          self.knownTermIDs.insert(termID)
+          self.fullyKnownTermIDs.insert(termID)
+          self.learnedScoresByTermID[termID] = 1.0
           self.emitViewModel()
         }
       } catch {
         await MainActor.run {
-          self.presenter.presentError("Mark known failed: \(error.localizedDescription)")
+          self.presenter.presentError("Mark fully known failed: \(error.localizedDescription)")
         }
       }
     }
@@ -166,15 +173,16 @@ final class WordsListInteractor {
         primarySpelling: primarySpelling,
         reading: reading,
         definitionSummary: definitionSummary,
-        isKnown: knownTermIDs.contains(termID),
+        isFullyKnown: fullyKnownTermIDs.contains(termID),
+        learnedScore: learnedScoresByTermID[termID] ?? 0,
         cardCoverageCount: coverageCountsByTermID[termID] ?? 0
       )
     }
 
-    switch activeKnownFilter {
+    switch activeFullyKnownFilter {
     case .all: break
-    case .knownOnly: rows = rows.filter { $0.isKnown }
-    case .unknownOnly: rows = rows.filter { !$0.isKnown }
+    case .fullyKnownOnly: rows = rows.filter { $0.isFullyKnown }
+    case .notFullyKnown: rows = rows.filter { !$0.isFullyKnown }
     }
 
     switch activeSortField {
@@ -182,10 +190,10 @@ final class WordsListInteractor {
       break
     case .mostKnown:
       rows.sort { lhs, rhs in
-        if lhs.isKnown != rhs.isKnown { return lhs.isKnown }
-        let lhsCoverage = lhs.cardCoverageCount
-        let rhsCoverage = rhs.cardCoverageCount
-        if lhsCoverage != rhsCoverage { return lhsCoverage > rhsCoverage }
+        if lhs.isFullyKnown != rhs.isFullyKnown { return lhs.isFullyKnown }
+        let lhsScore = lhs.isFullyKnown ? 2.0 : lhs.learnedScore
+        let rhsScore = rhs.isFullyKnown ? 2.0 : rhs.learnedScore
+        if lhsScore != rhsScore { return lhsScore > rhsScore }
         return (lhs.frequencyRank ?? Int.max) < (rhs.frequencyRank ?? Int.max)
       }
     }
@@ -198,7 +206,8 @@ final class WordsListInteractor {
         primarySpelling: row.primarySpelling,
         reading: row.reading,
         definitionSummary: row.definitionSummary,
-        isKnown: row.isKnown,
+        isFullyKnown: row.isFullyKnown,
+        learnedScore: row.learnedScore,
         cardCoverageCount: row.cardCoverageCount
       )
     }
@@ -209,7 +218,7 @@ final class WordsListInteractor {
       hasMorePages: hasMorePages,
       totalLoaded: allLoadedResults.count,
       activeSortField: activeSortField,
-      activeKnownFilter: activeKnownFilter,
+      activeFullyKnownFilter: activeFullyKnownFilter,
       searchQuery: searchQuery
     ))
   }

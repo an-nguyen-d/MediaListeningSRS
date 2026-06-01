@@ -25,7 +25,7 @@ public enum CandidateDetailModels {
     case startTimeAdjusted(deltaSeconds: TimeInterval)
     case endTimeAdjusted(deltaSeconds: TimeInterval)
     case termTapped(Int64)
-    case markTermAsKnown(Int64)
+    case markTermAsFullyKnown(Int64)
     case skipTapped
     case confirmTapped
   }
@@ -70,12 +70,12 @@ public enum CandidateDetailModels {
   public struct DictionaryLookupResult: Sendable, Equatable {
     public let japaneseTermID: Int64
     public let viewModel: DictionaryLookupViewModel
-    public let isAlreadyKnown: Bool
+    public let isAlreadyFullyKnown: Bool
 
-    public init(japaneseTermID: Int64, viewModel: DictionaryLookupViewModel, isAlreadyKnown: Bool) {
+    public init(japaneseTermID: Int64, viewModel: DictionaryLookupViewModel, isAlreadyFullyKnown: Bool) {
       self.japaneseTermID = japaneseTermID
       self.viewModel = viewModel
-      self.isAlreadyKnown = isAlreadyKnown
+      self.isAlreadyFullyKnown = isAlreadyFullyKnown
     }
   }
 }
