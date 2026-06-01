@@ -16,6 +16,7 @@ final class ProcessingQueueInteractor: ProcessingQueueInteractorProtocol {
   private let mediaListeningSRSDatabaseClient: MediaListeningSRSDatabaseClient
 
   private var observationTask: Task<Void, Never>?
+  private var totalCandidateCount: Int = 0
 
   init(
     presenter: ProcessingQueuePresenter,
@@ -45,6 +46,14 @@ final class ProcessingQueueInteractor: ProcessingQueueInteractorProtocol {
     let mediaSourceID = self.mediaSourceID
     observationTask = Task { [mediaListeningSRSDatabaseClient, presenter] in
       do {
+        let totalResponse = try await mediaListeningSRSDatabaseClient.mediaSourceCardCandidate
+          .fetchTotalCandidateCountForSource(.init(mediaSourceID: mediaSourceID))
+        let totalCount = totalResponse.totalCount
+
+        await MainActor.run {
+          self.totalCandidateCount = totalCount
+        }
+
         let stream = try await mediaListeningSRSDatabaseClient.mediaSourceCardCandidate.observeForSource(
           .init(mediaSourceID: mediaSourceID)
         )
@@ -53,7 +62,7 @@ final class ProcessingQueueInteractor: ProcessingQueueInteractorProtocol {
             let rows = candidates.map {
               ProcessingQueueModels.Row(id: $0.id, subtitleIndex: $0.subtitleIndex)
             }
-            presenter.presentRows(rows)
+            presenter.presentRows(rows, totalCandidateCount: totalCount)
           }
         }
       } catch {

@@ -205,8 +205,11 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
 
   // MARK: - ProcessingQueueDisplayer
 
-  func displayRows(_ rows: [ProcessingQueueModels.Row]) {
-    contentView.setRows(rows)
+  private var totalCandidateCount: Int = 0
+
+  func displayRows(_ rows: [ProcessingQueueModels.Row], totalCandidateCount: Int) {
+    self.totalCandidateCount = totalCandidateCount
+    contentView.setRows(rows, totalCandidateCount: totalCandidateCount)
 
     guard let currentID = currentDetailVCCandidateID,
           !rows.contains(where: { $0.id == currentID }) else {

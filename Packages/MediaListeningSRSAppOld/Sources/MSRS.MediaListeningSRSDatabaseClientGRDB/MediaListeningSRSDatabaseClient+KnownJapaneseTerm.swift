@@ -61,6 +61,28 @@ extension MediaListeningSRSDatabaseClient {
           )
           return .init(invalidTermIDs: invalidTermIDs)
         }
+      },
+      fetchCoverageCountsForTermIDs: { request in
+        try await databaseWriter.read { db in
+          guard !request.japaneseTermIDs.isEmpty else {
+            return .init(coverageCountsByTermID: [:])
+          }
+          let placeholders = request.japaneseTermIDs.map { _ in "?" }.joined(separator: ",")
+          let args = StatementArguments(request.japaneseTermIDs.map { $0 as DatabaseValueConvertible })!
+          let rows = try Row.fetchAll(db, sql: """
+            SELECT japaneseTermID, cardCoverageCount
+            FROM japaneseTermCardCoverageRecord
+            WHERE japaneseTermID IN (\(placeholders))
+          """, arguments: args)
+          var result: [Int64: Int] = [:]
+          for row in rows {
+            if let termID: Int64 = row["japaneseTermID"],
+               let count: Int = row["cardCoverageCount"] {
+              result[termID] = count
+            }
+          }
+          return .init(coverageCountsByTermID: result)
+        }
       }
     )
   }

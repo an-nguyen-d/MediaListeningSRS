@@ -126,21 +126,37 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
     }
 
+    public enum FetchTotalCandidateCountForSource {
+      public struct Request: Sendable {
+        public let mediaSourceID: MediaSourceModel.ID
+        public init(mediaSourceID: MediaSourceModel.ID) {
+          self.mediaSourceID = mediaSourceID
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public let totalCount: Int
+        public init(totalCount: Int) { self.totalCount = totalCount }
+      }
+    }
+
     public var bulkCreate: @Sendable (BulkCreate.Request) async throws -> BulkCreate.Response
     public var setSkipped: @Sendable (SetSkipped.Request) async throws -> SetSkipped.Response
     public var observeForSource: @Sendable (ObserveForSource.Request) async throws -> ObserveForSource.Response
     public var fetchTermIDsForCandidate: @Sendable (FetchTermIDsForCandidate.Request) async throws -> FetchTermIDsForCandidate.Response
+    public var fetchTotalCandidateCountForSource: @Sendable (FetchTotalCandidateCountForSource.Request) async throws -> FetchTotalCandidateCountForSource.Response
 
     public init(
       bulkCreate: @Sendable @escaping (BulkCreate.Request) async throws -> BulkCreate.Response,
       setSkipped: @Sendable @escaping (SetSkipped.Request) async throws -> SetSkipped.Response,
       observeForSource: @Sendable @escaping (ObserveForSource.Request) async throws -> ObserveForSource.Response,
-      fetchTermIDsForCandidate: @Sendable @escaping (FetchTermIDsForCandidate.Request) async throws -> FetchTermIDsForCandidate.Response
+      fetchTermIDsForCandidate: @Sendable @escaping (FetchTermIDsForCandidate.Request) async throws -> FetchTermIDsForCandidate.Response,
+      fetchTotalCandidateCountForSource: @Sendable @escaping (FetchTotalCandidateCountForSource.Request) async throws -> FetchTotalCandidateCountForSource.Response
     ) {
       self.bulkCreate = bulkCreate
       self.setSkipped = setSkipped
       self.observeForSource = observeForSource
       self.fetchTermIDsForCandidate = fetchTermIDsForCandidate
+      self.fetchTotalCandidateCountForSource = fetchTotalCandidateCountForSource
     }
   }
   public var mediaSourceCardCandidate: MediaSourceCardCandidate
@@ -333,21 +349,39 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
     }
 
+    public enum FetchCoverageCountsForTermIDs {
+      public struct Request: Sendable {
+        public let japaneseTermIDs: [Int64]
+        public init(japaneseTermIDs: [Int64]) {
+          self.japaneseTermIDs = japaneseTermIDs
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public let coverageCountsByTermID: [Int64: Int]
+        public init(coverageCountsByTermID: [Int64: Int]) {
+          self.coverageCountsByTermID = coverageCountsByTermID
+        }
+      }
+    }
+
     public var markAsKnown: @Sendable (MarkAsKnown.Request) async throws -> MarkAsKnown.Response
     public var isKnown: @Sendable (IsKnown.Request) async throws -> IsKnown.Response
     public var fetchKnownStatusForTermIDs: @Sendable (FetchKnownStatusForTermIDs.Request) async throws -> FetchKnownStatusForTermIDs.Response
     public var fetchInvalidTermIDs: @Sendable (FetchInvalidTermIDs.Request) async throws -> FetchInvalidTermIDs.Response
+    public var fetchCoverageCountsForTermIDs: @Sendable (FetchCoverageCountsForTermIDs.Request) async throws -> FetchCoverageCountsForTermIDs.Response
 
     public init(
       markAsKnown: @Sendable @escaping (MarkAsKnown.Request) async throws -> MarkAsKnown.Response,
       isKnown: @Sendable @escaping (IsKnown.Request) async throws -> IsKnown.Response,
       fetchKnownStatusForTermIDs: @Sendable @escaping (FetchKnownStatusForTermIDs.Request) async throws -> FetchKnownStatusForTermIDs.Response,
-      fetchInvalidTermIDs: @Sendable @escaping (FetchInvalidTermIDs.Request) async throws -> FetchInvalidTermIDs.Response
+      fetchInvalidTermIDs: @Sendable @escaping (FetchInvalidTermIDs.Request) async throws -> FetchInvalidTermIDs.Response,
+      fetchCoverageCountsForTermIDs: @Sendable @escaping (FetchCoverageCountsForTermIDs.Request) async throws -> FetchCoverageCountsForTermIDs.Response
     ) {
       self.markAsKnown = markAsKnown
       self.isKnown = isKnown
       self.fetchKnownStatusForTermIDs = fetchKnownStatusForTermIDs
       self.fetchInvalidTermIDs = fetchInvalidTermIDs
+      self.fetchCoverageCountsForTermIDs = fetchCoverageCountsForTermIDs
     }
   }
   public var knownJapaneseTerm: KnownJapaneseTerm

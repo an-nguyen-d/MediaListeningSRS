@@ -70,6 +70,7 @@ enum PackageTarget: String, CaseIterable {
   case SRSCardReviewScene
   case Shared
   case SharedModels
+  case WordsListScene
 
   // Tests
   case SharedModelsTests
@@ -119,7 +120,8 @@ enum PackageTarget: String, CaseIterable {
           .HomeScene,
           .MediaSourcesListScene,
           .Shared,
-          .SharedModels
+          .SharedModels,
+          .WordsListScene
         ) + [
         ]
       )
@@ -310,6 +312,18 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.SwiftTagged.Product.tagged.targetDependency,
           PackageDependency.IdentifiedCollections.Product.identifiedCollections.targetDependency,
           PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+        ]
+      )
+
+    case .WordsListScene:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .MediaListeningSRSDatabaseClient,
+          .Shared,
+          .SharedModels
+        ) + [
+          PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryModels.targetDependency,
         ]
       )
 

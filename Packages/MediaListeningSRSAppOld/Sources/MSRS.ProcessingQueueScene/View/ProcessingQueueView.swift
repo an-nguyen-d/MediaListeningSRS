@@ -17,6 +17,8 @@ final class ProcessingQueueView: UIView {
     instructionsView.isEditingInstructions
   }
 
+  private let progressLabel = UILabel()
+  private let progressSeparatorView = UIView()
   private let tableView = UITableView(frame: .zero, style: .insetGrouped)
   private let emptyLabel = UILabel()
   private let separatorView = UIView()
@@ -28,6 +30,7 @@ final class ProcessingQueueView: UIView {
   override init(frame: CGRect) {
     super.init(frame: frame)
     backgroundColor = .systemBackground
+    setUpProgressLabel()
     setUpTableView()
     setUpDetailContainer()
     setUpInstructionsPanel()
@@ -40,6 +43,19 @@ final class ProcessingQueueView: UIView {
   @available(*, unavailable)
   required init?(coder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
+  }
+
+  private func setUpProgressLabel() {
+    progressLabel.font = .monospacedDigitSystemFont(ofSize: 14, weight: .medium)
+    progressLabel.textColor = .secondaryLabel
+    progressLabel.textAlignment = .center
+    progressLabel.backgroundColor = .secondarySystemBackground
+    addSubview(progressLabel)
+    progressLabel.translatesAutoresizingMaskIntoConstraints = false
+
+    progressSeparatorView.backgroundColor = .separator
+    addSubview(progressSeparatorView)
+    progressSeparatorView.translatesAutoresizingMaskIntoConstraints = false
   }
 
   private func setUpTableView() {
@@ -81,7 +97,17 @@ final class ProcessingQueueView: UIView {
 
   private func setUpConstraints() {
     NSLayoutConstraint.activate([
-      tableView.topAnchor.constraint(equalTo: topAnchor),
+      progressLabel.topAnchor.constraint(equalTo: topAnchor),
+      progressLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
+      progressLabel.widthAnchor.constraint(equalToConstant: 360),
+      progressLabel.heightAnchor.constraint(equalToConstant: 36),
+
+      progressSeparatorView.topAnchor.constraint(equalTo: progressLabel.bottomAnchor),
+      progressSeparatorView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      progressSeparatorView.widthAnchor.constraint(equalToConstant: 360),
+      progressSeparatorView.heightAnchor.constraint(equalToConstant: 0.5),
+
+      tableView.topAnchor.constraint(equalTo: progressSeparatorView.bottomAnchor),
       tableView.leadingAnchor.constraint(equalTo: leadingAnchor),
       tableView.widthAnchor.constraint(equalToConstant: 360),
       tableView.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -110,10 +136,11 @@ final class ProcessingQueueView: UIView {
     ])
   }
 
-  func setRows(_ rows: [ProcessingQueueModels.Row]) {
+  func setRows(_ rows: [ProcessingQueueModels.Row], totalCandidateCount: Int) {
     self.rows = rows
     tableView.reloadData()
     updateEmptyState()
+    updateProgressLabel(remainingCount: rows.count, totalCount: totalCandidateCount)
     if let selectedRowID = self.selectedRowID,
        let index = rows.firstIndex(where: { $0.id == selectedRowID }) {
       let indexPath = IndexPath(row: index, section: 0)
@@ -154,6 +181,16 @@ final class ProcessingQueueView: UIView {
 
   func setInstructionsText(_ text: String) {
     instructionsView.setInstructionsText(text)
+  }
+
+  private func updateProgressLabel(remainingCount: Int, totalCount: Int) {
+    guard totalCount > 0 else {
+      progressLabel.text = ""
+      return
+    }
+    let completedCount = totalCount - remainingCount
+    let percentage = Int(round(Double(completedCount) / Double(totalCount) * 100))
+    progressLabel.text = "\(completedCount)/\(totalCount)  \(percentage)%"
   }
 
   private func updateEmptyState() {

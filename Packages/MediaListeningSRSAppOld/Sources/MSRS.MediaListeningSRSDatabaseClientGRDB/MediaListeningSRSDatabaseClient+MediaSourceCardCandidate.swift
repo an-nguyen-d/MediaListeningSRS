@@ -96,6 +96,14 @@ extension MediaListeningSRSDatabaseClient {
           """, arguments: [request.candidateID.rawValue])
           return .init(japaneseTermIDs: rows.compactMap { $0["japaneseTermID"] as Int64? })
         }
+      },
+      fetchTotalCandidateCountForSource: { request in
+        try await databaseWriter.read { db in
+          let count = try MediaSourceCardCandidateRecord
+            .filter(Column("mediaSourceID") == request.mediaSourceID.rawValue)
+            .fetchCount(db)
+          return .init(totalCount: count)
+        }
       }
     )
   }
