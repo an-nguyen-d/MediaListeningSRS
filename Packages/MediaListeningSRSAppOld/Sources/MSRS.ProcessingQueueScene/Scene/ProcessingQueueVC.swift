@@ -1,4 +1,5 @@
 import UIKit
+import JML_JMLDatabaseClient
 import MSRS_CandidateDetailScene
 import MSRS_Shared
 import MSRS_SharedModels
@@ -31,7 +32,8 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
     self.interactor = ProcessingQueueInteractor(
       presenter: presenter,
       mediaSourceID: mediaSourceID,
-      mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient
+      mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
+      jmlDatabaseClient: dependencies.jmlDatabaseClient
     )
     super.init(nibName: nil, bundle: nil)
     presenter.displayer = self
@@ -47,7 +49,6 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
 
   public override func viewDidLoad() {
     super.viewDidLoad()
-    title = "Processing Queue"
     contentView.onRowTapped = { [weak self] id in
       self?.interactor.sendAction(.rowTapped(id))
     }
@@ -206,6 +207,10 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
   // MARK: - ProcessingQueueDisplayer
 
   private var totalCandidateCount: Int = 0
+
+  func displayTitle(_ title: String) {
+    self.title = title
+  }
 
   func displayRows(_ rows: [ProcessingQueueModels.Row], totalCandidateCount: Int) {
     self.totalCandidateCount = totalCandidateCount

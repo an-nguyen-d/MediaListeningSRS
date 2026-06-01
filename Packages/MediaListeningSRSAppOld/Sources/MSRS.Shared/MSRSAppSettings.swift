@@ -33,6 +33,20 @@ public enum MSRSAppSettings {
   private static let minimumCardCoverageCountKey = "MSRS.Settings.minimumCardCoverageCount"
   public static let minimumCardCoverageCountDefault: Int = 50
 
+  private static let showFrontTranscriptKey = "MSRS.Settings.showFrontTranscript"
+
+  public static var showFrontTranscript: Bool {
+    get {
+      if UserDefaults.standard.object(forKey: showFrontTranscriptKey) == nil {
+        return true
+      }
+      return UserDefaults.standard.bool(forKey: showFrontTranscriptKey)
+    }
+    set {
+      UserDefaults.standard.set(newValue, forKey: showFrontTranscriptKey)
+    }
+  }
+
   public static var minimumCardCoverageCount: Int {
     get {
       if UserDefaults.standard.object(forKey: minimumCardCoverageCountKey) == nil {

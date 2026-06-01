@@ -189,6 +189,11 @@ extension MediaListeningSRSDatabaseClient {
           record.lapseCount = updatedFSRSCard.lapses
           record.lastReviewDate = updatedFSRSCard.lastReview
           record.dueDate = updatedFSRSCard.due
+          if rating == .good || rating == .easy {
+            record.consecutiveCorrectAtCurrentSpeed += 1
+          } else {
+            record.consecutiveCorrectAtCurrentSpeed = 0
+          }
           record.lastUpdatedAt = now
           try record.update(db)
 
@@ -211,8 +216,6 @@ extension MediaListeningSRSDatabaseClient {
       },
       fetchDueCards: { request in
         try await databaseWriter.read { db in
-          // 1) Overdue cards (have been reviewed, due date in the past) — most overdue first
-          // 2) New cards (never reviewed, dueDate is NULL) — oldest created first
           let records = try SRSCardRecord.fetchAll(db, sql: """
             SELECT * FROM srsCardRecord
             WHERE dueDate IS NULL OR dueDate <= ?
@@ -222,6 +225,29 @@ extension MediaListeningSRSDatabaseClient {
               createdAt ASC
           """, arguments: [request.asOf])
           return .init(cards: records.map { GRDBMapper.SRSCard.mapToModel(from: $0) })
+        }
+      },
+      updateFrontVideoVisibility: { request in
+        try await databaseWriter.write { db in
+          guard var record = try SRSCardRecord.fetchOne(db, key: request.cardID.rawValue) else {
+            throw MediaListeningSRSDatabaseError.recordNotFound(id: request.cardID.rawValue)
+          }
+          record.frontVideoVisibilityRawValue = request.visibility.rawValue
+          record.lastUpdatedAt = Date()
+          try record.update(db)
+          return .init()
+        }
+      },
+      updatePlaybackSpeed: { request in
+        try await databaseWriter.write { db in
+          guard var record = try SRSCardRecord.fetchOne(db, key: request.cardID.rawValue) else {
+            throw MediaListeningSRSDatabaseError.recordNotFound(id: request.cardID.rawValue)
+          }
+          record.playbackSpeed = request.speed
+          record.consecutiveCorrectAtCurrentSpeed = 0
+          record.lastUpdatedAt = Date()
+          try record.update(db)
+          return .init()
         }
       }
     )

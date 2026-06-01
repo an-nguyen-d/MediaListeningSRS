@@ -25,6 +25,13 @@ public struct SRSCardRecord: Codable, FetchableRecord, MutablePersistableRecord,
   // MARK: - Card type (reserved for future review modes — only listening = 1 for now)
   public var cardType: Int = 1
 
+  // MARK: - Front video visibility (persisted per-card progressive disclosure state)
+  public var frontVideoVisibilityRawValue: Int = 0
+
+  // MARK: - Playback speed and streak
+  public var playbackSpeed: Double = 1.0
+  public var consecutiveCorrectAtCurrentSpeed: Int = 0
+
   // MARK: - FSRS scheduling state (populated by the FSRS-driven review flow; defaults = new card)
   public var stateRawValue: Int = 0       // CardState .new
   public var stability: Double = 0

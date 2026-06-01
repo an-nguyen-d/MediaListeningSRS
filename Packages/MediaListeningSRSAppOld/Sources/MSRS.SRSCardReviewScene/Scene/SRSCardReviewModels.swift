@@ -25,6 +25,8 @@ public enum SRSCardReviewModels {
     case termTapped(Int64)
     case markTermAsKnown(Int64)
     case gradedAndNext(Grade)
+    case frontVideoVisibilityChanged(SRSCardModel.FrontVideoVisibility)
+    case playbackSpeedChanged(Double)
   }
 
   public enum Grade: Sendable, Equatable {
@@ -41,6 +43,10 @@ public enum SRSCardReviewModels {
     public let transcriptLabeledRanges: [HighlightableTranscriptLabeledRange]
     public let englishTranslationText: String?
     public let cardPositionLabel: String
+    public let frontVideoVisibility: SRSCardModel.FrontVideoVisibility
+    public let thumbnailFileURL: URL
+    public let playbackSpeed: Double
+    public let consecutiveCorrectAtCurrentSpeed: Int
 
     public init(
       cardID: SRSCardModel.ID,
@@ -50,7 +56,11 @@ public enum SRSCardReviewModels {
       transcriptText: String,
       transcriptLabeledRanges: [HighlightableTranscriptLabeledRange],
       englishTranslationText: String?,
-      cardPositionLabel: String
+      cardPositionLabel: String,
+      frontVideoVisibility: SRSCardModel.FrontVideoVisibility,
+      thumbnailFileURL: URL,
+      playbackSpeed: Double,
+      consecutiveCorrectAtCurrentSpeed: Int
     ) {
       self.cardID = cardID
       self.videoFileURL = videoFileURL
@@ -60,6 +70,10 @@ public enum SRSCardReviewModels {
       self.transcriptLabeledRanges = transcriptLabeledRanges
       self.englishTranslationText = englishTranslationText
       self.cardPositionLabel = cardPositionLabel
+      self.frontVideoVisibility = frontVideoVisibility
+      self.thumbnailFileURL = thumbnailFileURL
+      self.playbackSpeed = playbackSpeed
+      self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed
     }
   }
 

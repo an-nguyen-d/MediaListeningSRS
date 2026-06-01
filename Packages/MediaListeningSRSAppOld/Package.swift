@@ -243,6 +243,8 @@ enum PackageTarget: String, CaseIterable {
           .SharedModels,
           .SRSCardReviewScene
         ) + [
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
         ]
       )
 

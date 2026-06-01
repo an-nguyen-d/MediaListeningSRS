@@ -258,12 +258,42 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
     }
 
+    public enum UpdateFrontVideoVisibility {
+      public struct Request: Sendable {
+        public let cardID: SRSCardModel.ID
+        public let visibility: SRSCardModel.FrontVideoVisibility
+        public init(cardID: SRSCardModel.ID, visibility: SRSCardModel.FrontVideoVisibility) {
+          self.cardID = cardID
+          self.visibility = visibility
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public init() {}
+      }
+    }
+
+    public enum UpdatePlaybackSpeed {
+      public struct Request: Sendable {
+        public let cardID: SRSCardModel.ID
+        public let speed: Double
+        public init(cardID: SRSCardModel.ID, speed: Double) {
+          self.cardID = cardID
+          self.speed = speed
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public init() {}
+      }
+    }
+
     public var create: @Sendable (Create.Request) async throws -> Create.Response
     public var delete: @Sendable (Delete.Request) async throws -> Delete.Response
     public var observeForSource: @Sendable (ObserveForSource.Request) async throws -> ObserveForSource.Response
     public var observeAll: @Sendable (ObserveAll.Request) async throws -> ObserveAll.Response
     public var recordReview: @Sendable (RecordReview.Request) async throws -> RecordReview.Response
     public var fetchDueCards: @Sendable (FetchDueCards.Request) async throws -> FetchDueCards.Response
+    public var updateFrontVideoVisibility: @Sendable (UpdateFrontVideoVisibility.Request) async throws -> UpdateFrontVideoVisibility.Response
+    public var updatePlaybackSpeed: @Sendable (UpdatePlaybackSpeed.Request) async throws -> UpdatePlaybackSpeed.Response
 
     public init(
       create: @Sendable @escaping (Create.Request) async throws -> Create.Response,
@@ -271,7 +301,9 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       observeForSource: @Sendable @escaping (ObserveForSource.Request) async throws -> ObserveForSource.Response,
       observeAll: @Sendable @escaping (ObserveAll.Request) async throws -> ObserveAll.Response,
       recordReview: @Sendable @escaping (RecordReview.Request) async throws -> RecordReview.Response,
-      fetchDueCards: @Sendable @escaping (FetchDueCards.Request) async throws -> FetchDueCards.Response
+      fetchDueCards: @Sendable @escaping (FetchDueCards.Request) async throws -> FetchDueCards.Response,
+      updateFrontVideoVisibility: @Sendable @escaping (UpdateFrontVideoVisibility.Request) async throws -> UpdateFrontVideoVisibility.Response,
+      updatePlaybackSpeed: @Sendable @escaping (UpdatePlaybackSpeed.Request) async throws -> UpdatePlaybackSpeed.Response
     ) {
       self.create = create
       self.delete = delete
@@ -279,6 +311,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       self.observeAll = observeAll
       self.recordReview = recordReview
       self.fetchDueCards = fetchDueCards
+      self.updateFrontVideoVisibility = updateFrontVideoVisibility
+      self.updatePlaybackSpeed = updatePlaybackSpeed
     }
   }
   public var srsCard: SRSCard

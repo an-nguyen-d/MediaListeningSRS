@@ -36,6 +36,10 @@ public final class SettingsVC: UIViewController {
     MSRSAppSettings.requireSkipOrMakeCardConfirmation = sender.isOn
   }
 
+  @objc private func showFrontTranscriptToggleChanged(_ sender: UISwitch) {
+    MSRSAppSettings.showFrontTranscript = sender.isOn
+  }
+
   @objc private func retentionSliderChanged(_ sender: UISlider) {
     let rounded = (Double(sender.value) * 100).rounded() / 100
     MSRSAppSettings.desiredRetention = rounded
@@ -57,15 +61,16 @@ public final class SettingsVC: UIViewController {
 
 extension SettingsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 3 }
+  public func numberOfSections(in tableView: UITableView) -> Int { 4 }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 1 }
 
   public func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
     switch section {
     case 0: return "Processing Queue"
-    case 1: return "SRS Scheduling"
-    case 2: return "Candidate Filtering"
+    case 1: return "SRS Review"
+    case 2: return "SRS Scheduling"
+    case 3: return "Candidate Filtering"
     default: return nil
     }
   }
@@ -75,8 +80,10 @@ extension SettingsVC: UITableViewDataSource {
     case 0:
       return "When enabled, a confirmation popup appears before skipping or making a card."
     case 1:
-      return "Lower retention = longer intervals between reviews (more aggressive). Higher retention = shorter intervals (more conservative). Default is 90%. Takes effect on the next review of each card."
+      return "Show or hide the Japanese transcript reveal area on the front of SRS review cards."
     case 2:
+      return "Lower retention = longer intervals between reviews (more aggressive). Higher retention = shorter intervals (more conservative). Default is 90%. Takes effect on the next review of each card."
+    case 3:
       return "Candidates where all tagged words are either known or already covered by this many cards will be auto-filtered from the processing queue. Only affects new imports and card creations going forward."
     default:
       return nil
@@ -96,6 +103,16 @@ extension SettingsVC: UITableViewDataSource {
       return cell
 
     case 1:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.textLabel?.text = "Show Front Transcript"
+      cell.selectionStyle = .none
+      let toggle = UISwitch()
+      toggle.isOn = MSRSAppSettings.showFrontTranscript
+      toggle.addTarget(self, action: #selector(showFrontTranscriptToggleChanged(_:)), for: .valueChanged)
+      cell.accessoryView = toggle
+      return cell
+
+    case 2:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
       cell.selectionStyle = .none
       cell.textLabel?.text = ""
@@ -138,7 +155,7 @@ extension SettingsVC: UITableViewDataSource {
       ])
       return cell
 
-    case 2:
+    case 3:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
       cell.selectionStyle = .none
       cell.textLabel?.text = ""

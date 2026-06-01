@@ -4,6 +4,21 @@ import Tagged
 public struct SRSCardModel: Identifiable, Sendable, Equatable {
 
   public typealias ID = Tagged<(Self, id: ()), Int64>
+
+  public enum FrontVideoVisibility: Int, Sendable, Equatable, Codable {
+    case blackScreen = 0
+    case blurredThumbnail = 1
+    case clearThumbnail = 2
+
+    public var next: FrontVideoVisibility {
+      switch self {
+      case .blackScreen: .blurredThumbnail
+      case .blurredThumbnail: .clearThumbnail
+      case .clearThumbnail: .blackScreen
+      }
+    }
+  }
+
   public let id: ID
 
   public let createdAt: Date
@@ -19,6 +34,10 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
 
   public let clipRelativeFilePath: String
 
+  public var frontVideoVisibility: FrontVideoVisibility
+  public var playbackSpeed: Double
+  public var consecutiveCorrectAtCurrentSpeed: Int
+
   public init(
     id: ID,
     createdAt: Date,
@@ -28,7 +47,10 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     subtitleIndexEnd: Int,
     clipStartTimeSeconds: TimeInterval,
     clipEndTimeSeconds: TimeInterval,
-    clipRelativeFilePath: String
+    clipRelativeFilePath: String,
+    frontVideoVisibility: FrontVideoVisibility = .blackScreen,
+    playbackSpeed: Double = 1.0,
+    consecutiveCorrectAtCurrentSpeed: Int = 0
   ) {
     self.id = id
     self.createdAt = createdAt
@@ -39,5 +61,8 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     self.clipStartTimeSeconds = clipStartTimeSeconds
     self.clipEndTimeSeconds = clipEndTimeSeconds
     self.clipRelativeFilePath = clipRelativeFilePath
+    self.frontVideoVisibility = frontVideoVisibility
+    self.playbackSpeed = playbackSpeed
+    self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed
   }
 }

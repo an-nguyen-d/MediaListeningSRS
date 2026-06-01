@@ -47,6 +47,12 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
       self?.contentView.setSelectedTermID(termID)
       self?.interactor.sendAction(.termTapped(termID))
     }
+    contentView.onFrontVideoVisibilityChanged = { [weak self] visibility in
+      self?.interactor.sendAction(.frontVideoVisibilityChanged(visibility))
+    }
+    contentView.onPlaybackSpeedChanged = { [weak self] speed in
+      self?.interactor.sendAction(.playbackSpeedChanged(speed))
+    }
     interactor.sendAction(.viewDidLoad)
   }
 
@@ -59,18 +65,23 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
 
   public override var keyCommands: [UIKeyCommand]? {
     [
-      UIKeyCommand(input: "r", modifierFlags: [], action: #selector(rPressed), discoverabilityTitle: "Replay"),
-      UIKeyCommand(input: " ", modifierFlags: [], action: #selector(spacePressed), discoverabilityTitle: "Reveal Back"),
+      UIKeyCommand(input: "t", modifierFlags: [], action: #selector(tPressed), discoverabilityTitle: "Toggle Thumbnail"),
+      UIKeyCommand(input: " ", modifierFlags: [], action: #selector(spacePressed), discoverabilityTitle: "Play"),
+      UIKeyCommand(input: "\r", modifierFlags: [], action: #selector(returnPressed), discoverabilityTitle: "Reveal Back"),
       UIKeyCommand(input: "1", modifierFlags: [], action: #selector(failPressed), discoverabilityTitle: "Fail"),
       UIKeyCommand(input: "2", modifierFlags: [], action: #selector(passPressed), discoverabilityTitle: "Pass"),
     ]
   }
 
-  @objc private func rPressed() {
-    interactor.sendAction(.replayTapped)
+  @objc private func tPressed() {
+    contentView.cycleFrontVideoVisibility()
   }
 
   @objc private func spacePressed() {
+    interactor.sendAction(.replayTapped)
+  }
+
+  @objc private func returnPressed() {
     guard !contentView.isShowingBackSide else { return }
     interactor.sendAction(.revealBackTapped)
   }

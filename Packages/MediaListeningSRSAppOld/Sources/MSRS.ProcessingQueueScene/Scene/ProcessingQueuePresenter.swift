@@ -3,6 +3,7 @@ import MSRS_SharedModels
 
 @MainActor
 protocol ProcessingQueueDisplayer: AnyObject {
+  func displayTitle(_ title: String)
   func displayRows(_ rows: [ProcessingQueueModels.Row], totalCandidateCount: Int)
   func displayError(_ message: String)
   func displayNavigateToCandidateDetail(
@@ -15,6 +16,10 @@ protocol ProcessingQueueDisplayer: AnyObject {
 final class ProcessingQueuePresenter {
 
   weak var displayer: ProcessingQueueDisplayer!
+
+  func presentTitle(_ title: String) {
+    displayer?.displayTitle(title)
+  }
 
   func presentRows(_ rows: [ProcessingQueueModels.Row], totalCandidateCount: Int) {
     displayer?.displayRows(rows, totalCandidateCount: totalCandidateCount)

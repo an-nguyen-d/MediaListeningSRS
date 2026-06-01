@@ -1,4 +1,5 @@
 import UIKit
+import JML_JMLDatabaseClient
 import MSRS_MediaSourceImportPickerScene
 import MSRS_ProcessingQueueScene
 import MSRS_SettingsScene
@@ -16,7 +17,8 @@ public final class MediaSourcesListVC: UIViewController, MediaSourcesListDisplay
     let presenter = MediaSourcesListPresenter()
     self.interactor = MediaSourcesListInteractor(
       presenter: presenter,
-      mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient
+      mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
+      jmlDatabaseClient: dependencies.jmlDatabaseClient
     )
     super.init(nibName: nil, bundle: nil)
     presenter.displayer = self

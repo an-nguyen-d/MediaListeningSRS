@@ -83,7 +83,10 @@ internal enum GRDBMapper {
         subtitleIndexEnd: record.subtitleIndexEnd,
         clipStartTimeSeconds: record.clipStartTimeSeconds,
         clipEndTimeSeconds: record.clipEndTimeSeconds,
-        clipRelativeFilePath: record.clipRelativeFilePath
+        clipRelativeFilePath: record.clipRelativeFilePath,
+        frontVideoVisibility: SRSCardModel.FrontVideoVisibility(rawValue: record.frontVideoVisibilityRawValue) ?? .blackScreen,
+        playbackSpeed: record.playbackSpeed,
+        consecutiveCorrectAtCurrentSpeed: record.consecutiveCorrectAtCurrentSpeed
       )
     }
   }

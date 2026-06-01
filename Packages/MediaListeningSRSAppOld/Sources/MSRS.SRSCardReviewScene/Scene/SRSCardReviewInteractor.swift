@@ -71,6 +71,10 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       handleMarkTermAsKnown(termID)
     case .gradedAndNext(let grade):
       handleGraded(grade)
+    case .frontVideoVisibilityChanged(let visibility):
+      handleFrontVideoVisibilityChanged(visibility)
+    case .playbackSpeedChanged(let speed):
+      handlePlaybackSpeedChanged(speed)
     }
   }
 
@@ -89,6 +93,29 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
           presenter.presentError("Mark known failed: \(error.localizedDescription)")
         }
       }
+    }
+  }
+
+  private func handleFrontVideoVisibilityChanged(_ visibility: SRSCardModel.FrontVideoVisibility) {
+    guard currentIndex < cards.count else { return }
+    let card = cards[currentIndex]
+    cards[currentIndex].frontVideoVisibility = visibility
+    Task { [mediaListeningSRSDatabaseClient] in
+      try? await mediaListeningSRSDatabaseClient.srsCard.updateFrontVideoVisibility(
+        .init(cardID: card.id, visibility: visibility)
+      )
+    }
+  }
+
+  private func handlePlaybackSpeedChanged(_ speed: Double) {
+    guard currentIndex < cards.count else { return }
+    let card = cards[currentIndex]
+    cards[currentIndex].playbackSpeed = speed
+    cards[currentIndex].consecutiveCorrectAtCurrentSpeed = 0
+    Task { [mediaListeningSRSDatabaseClient] in
+      try? await mediaListeningSRSDatabaseClient.srsCard.updatePlaybackSpeed(
+        .init(cardID: card.id, speed: speed)
+      )
     }
   }
 
@@ -225,6 +252,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       .compactMap { cache.englishTranslationsByIndex[$0] }
     let translationText = translationParts.isEmpty ? nil : translationParts.joined(separator: "\n")
 
+    let clipFileURL = exportedClipsDirectoryURL.appendingPathComponent(card.clipRelativeFilePath)
+    let thumbnailFileURL = clipFileURL.deletingPathExtension().appendingPathExtension("jpg")
+
     presenter.presentCard(.init(
       cardID: card.id,
       videoFileURL: cache.videoFileURL,
@@ -233,7 +263,11 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       transcriptText: transcriptText,
       transcriptLabeledRanges: labeledRanges,
       englishTranslationText: translationText,
-      cardPositionLabel: "\(currentIndex + 1) of \(cards.count)"
+      cardPositionLabel: "\(currentIndex + 1) of \(cards.count)",
+      frontVideoVisibility: card.frontVideoVisibility,
+      thumbnailFileURL: thumbnailFileURL,
+      playbackSpeed: card.playbackSpeed,
+      consecutiveCorrectAtCurrentSpeed: card.consecutiveCorrectAtCurrentSpeed
     ))
   }
 

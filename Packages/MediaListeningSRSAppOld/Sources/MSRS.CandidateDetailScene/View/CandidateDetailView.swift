@@ -21,6 +21,7 @@ final class CandidateDetailView: UIView {
   private let stack = UIStackView()
 
   private let playerView = PlayerLayerView()
+  private let clipProgressBar = ClipProgressBar()
   private var playerHeightConstraint: NSLayoutConstraint!
   private let dragHandleView = UIView()
   private let dragHandleBar = UIView()
@@ -194,6 +195,7 @@ final class CandidateDetailView: UIView {
     let actionsRow = UIStackView.leadingPinnedRow(children: [skipButton, confirmButton], spacing: 16)
 
     stack.addArrangedSubview(playerView)
+    stack.addArrangedSubview(clipProgressBar)
     stack.addArrangedSubview(dragHandleView)
     stack.addArrangedSubview(playPauseRow)
     stack.addArrangedSubview(speedRow)
@@ -310,6 +312,7 @@ final class CandidateDetailView: UIView {
   private func startLoop() {
     guard let player = self.player else { return }
     isLoopActive = true
+    clipProgressBar.reset()
     Self.setStyledButtonTitle(playPauseButton, title: "Pause", hotkey: "Space")
     pendingLoopRestartTask?.cancel()
     pendingLoopRestartTask = nil
@@ -340,8 +343,14 @@ final class CandidateDetailView: UIView {
         guard let self = self,
               self.isLoopActive,
               let player = self.player else { return }
+        let currentSeconds = CMTimeGetSeconds(player.currentTime())
+        let duration = self.currentClipEndTime - self.currentClipStartTime
+        if duration > 0 {
+          self.clipProgressBar.setProgress((currentSeconds - self.currentClipStartTime) / duration)
+        }
         let endCMTime = CMTime(seconds: self.currentClipEndTime, preferredTimescale: 600)
         if CMTimeCompare(player.currentTime(), endCMTime) >= 0 {
+          self.clipProgressBar.setProgress(1)
           self.scheduleLoopRestart()
         }
       }

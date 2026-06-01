@@ -1,38 +1,44 @@
 import UIKit
 import AVFoundation
 import MSRS_Shared
+import MSRS_SharedModels
 
 final class SRSCardReviewView: UIView {
 
-  var onReplayTapped: (() -> Void)?
   var onRevealBackTapped: (() -> Void)?
+  var onReplayTapped: (() -> Void)?
   var onGraded: ((SRSCardReviewModels.Grade) -> Void)?
   var onTermTapped: ((Int64) -> Void)?
+  var onFrontVideoVisibilityChanged: ((SRSCardModel.FrontVideoVisibility) -> Void)?
+  var onPlaybackSpeedChanged: ((Double) -> Void)?
 
-  private static let loopGapSeconds: TimeInterval = 0.5
-
-  private enum FrontVideoVisibility {
-    case blackThumbnail
-    case blurredVideo
-    case clearVideo
-  }
-
-  // MARK: - Common (used on both sides)
+  // MARK: - Common
 
   private let positionLabel = UILabel()
+  private let clipProgressBar = ClipProgressBar()
   private let videoStageView = UIView()
+  private let thumbnailImageView = UIImageView()
   private let playerView = PlayerLayerView()
-  private let blurOverlayView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+  private let blurContainerView = UIView()
+  private let blurOverlayView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
   private let blackMaskView = UIView()
+
+  // MARK: - Speed controls (shared creation, separate instances for front/back)
+
+  private let frontSpeedRow = UIStackView()
+  private let frontSpeedLabel = UILabel()
+  private let backSpeedRow = UIStackView()
+  private let backSpeedLabel = UILabel()
+  private let backStreakLabel = UILabel()
 
   // MARK: - Front
 
   private let frontContainer = UIView()
-  private let frontVideoTapView = UIView()
   private let frontTranscriptRevealContainer = UIView()
   private let frontTranscriptRevealHint = UILabel()
   private let frontTranscriptLabel = UILabel()
-  private let frontReplayButton = UIButton(type: .system)
+  private let frontToggleButton = UIButton(type: .system)
+  private let frontPlayButton = UIButton(type: .system)
   private let frontRevealBackButton = UIButton(type: .system)
 
   // MARK: - Back
@@ -40,6 +46,7 @@ final class SRSCardReviewView: UIView {
   private let backContainer = UIView()
   private let backTranscriptView = HighlightableTranscriptView()
   private let backTranslationLabel = UILabel()
+  private let backPlayButton = UIButton(type: .system)
   private let backFailButton = UIButton(type: .system)
   private let backPassButton = UIButton(type: .system)
 
@@ -49,22 +56,24 @@ final class SRSCardReviewView: UIView {
 
   // MARK: - State
 
-  private var frontVideoVisibility: FrontVideoVisibility = .blackThumbnail
+  private var frontVideoVisibility: SRSCardModel.FrontVideoVisibility = .blackScreen
   private var isShowingBack = false
   private var isFrontTranscriptRevealed = false
+  private var isVideoPlaying = false
+  private var playbackSpeed: Double = 1.0
 
   private var player: AVPlayer?
   private var currentClipStartTime: TimeInterval = 0
   private var currentClipEndTime: TimeInterval = 0
-  private var loopObserver: Any?
-  private var pendingLoopRestartTask: Task<Void, Never>?
-  private var isLooping = false
+  private var endObserver: Any?
+  private var thumbnailTask: Task<Void, Never>?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
     backgroundColor = .systemBackground
     setUpPositionLabel()
     setUpVideoStage()
+    setUpSpeedControls()
     setUpFront()
     setUpBack()
     setUpEmptyLabel()
@@ -73,12 +82,10 @@ final class SRSCardReviewView: UIView {
   }
 
   @available(*, unavailable)
-  required init?(coder: NSCoder) {
-    fatalError()
-  }
+  required init?(coder: NSCoder) { fatalError() }
 
   deinit {
-    pendingLoopRestartTask?.cancel()
+    thumbnailTask?.cancel()
   }
 
   // MARK: - Setup
@@ -93,28 +100,44 @@ final class SRSCardReviewView: UIView {
 
   private func setUpVideoStage() {
     videoStageView.backgroundColor = .black
+    videoStageView.clipsToBounds = true
     videoStageView.translatesAutoresizingMaskIntoConstraints = false
 
+    thumbnailImageView.contentMode = .scaleAspectFit
+    thumbnailImageView.backgroundColor = .black
+    thumbnailImageView.translatesAutoresizingMaskIntoConstraints = false
+    videoStageView.addSubview(thumbnailImageView)
+
     playerView.translatesAutoresizingMaskIntoConstraints = false
+    playerView.isHidden = true
     videoStageView.addSubview(playerView)
 
-    blurOverlayView.translatesAutoresizingMaskIntoConstraints = false
-    videoStageView.addSubview(blurOverlayView)
+    blurContainerView.clipsToBounds = true
+    blurContainerView.translatesAutoresizingMaskIntoConstraints = false
+    videoStageView.addSubview(blurContainerView)
+    blurOverlayView.frame = .zero
+    blurOverlayView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    blurContainerView.addSubview(blurOverlayView)
 
     blackMaskView.backgroundColor = .black
     blackMaskView.translatesAutoresizingMaskIntoConstraints = false
     videoStageView.addSubview(blackMaskView)
 
     NSLayoutConstraint.activate([
+      thumbnailImageView.topAnchor.constraint(equalTo: videoStageView.topAnchor),
+      thumbnailImageView.leadingAnchor.constraint(equalTo: videoStageView.leadingAnchor),
+      thumbnailImageView.trailingAnchor.constraint(equalTo: videoStageView.trailingAnchor),
+      thumbnailImageView.bottomAnchor.constraint(equalTo: videoStageView.bottomAnchor),
+
       playerView.topAnchor.constraint(equalTo: videoStageView.topAnchor),
       playerView.leadingAnchor.constraint(equalTo: videoStageView.leadingAnchor),
       playerView.trailingAnchor.constraint(equalTo: videoStageView.trailingAnchor),
       playerView.bottomAnchor.constraint(equalTo: videoStageView.bottomAnchor),
 
-      blurOverlayView.topAnchor.constraint(equalTo: videoStageView.topAnchor),
-      blurOverlayView.leadingAnchor.constraint(equalTo: videoStageView.leadingAnchor),
-      blurOverlayView.trailingAnchor.constraint(equalTo: videoStageView.trailingAnchor),
-      blurOverlayView.bottomAnchor.constraint(equalTo: videoStageView.bottomAnchor),
+      blurContainerView.topAnchor.constraint(equalTo: videoStageView.topAnchor),
+      blurContainerView.leadingAnchor.constraint(equalTo: videoStageView.leadingAnchor),
+      blurContainerView.trailingAnchor.constraint(equalTo: videoStageView.trailingAnchor),
+      blurContainerView.bottomAnchor.constraint(equalTo: videoStageView.bottomAnchor),
 
       blackMaskView.topAnchor.constraint(equalTo: videoStageView.topAnchor),
       blackMaskView.leadingAnchor.constraint(equalTo: videoStageView.leadingAnchor),
@@ -125,13 +148,70 @@ final class SRSCardReviewView: UIView {
     ])
   }
 
+  private func setUpSpeedControls() {
+    configureSpeedRow(frontSpeedRow, speedLabel: frontSpeedLabel)
+    configureSpeedRow(backSpeedRow, speedLabel: backSpeedLabel)
+
+    backStreakLabel.font = .preferredFont(forTextStyle: .footnote)
+    backStreakLabel.textColor = .secondaryLabel
+    backStreakLabel.textAlignment = .center
+    backStreakLabel.translatesAutoresizingMaskIntoConstraints = false
+  }
+
+  private func configureSpeedRow(_ row: UIStackView, speedLabel: UILabel) {
+    row.axis = .horizontal
+    row.spacing = 8
+    row.alignment = .center
+    row.translatesAutoresizingMaskIntoConstraints = false
+
+    let minus01 = makeSpeedButton(title: "−0.1", delta: -0.1)
+    let minus005 = makeSpeedButton(title: "−0.05", delta: -0.05)
+    let plus005 = makeSpeedButton(title: "+0.05", delta: 0.05)
+    let plus01 = makeSpeedButton(title: "+0.1", delta: 0.1)
+
+    speedLabel.font = .monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
+    speedLabel.textAlignment = .center
+    speedLabel.translatesAutoresizingMaskIntoConstraints = false
+    speedLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 52).isActive = true
+
+    row.addArrangedSubview(minus01)
+    row.addArrangedSubview(minus005)
+    row.addArrangedSubview(speedLabel)
+    row.addArrangedSubview(plus005)
+    row.addArrangedSubview(plus01)
+  }
+
+  private func makeSpeedButton(title: String, delta: Double) -> UIButton {
+    var config = UIButton.Configuration.tinted()
+    config.title = title
+    config.baseBackgroundColor = .systemGray
+    config.baseForegroundColor = .label
+    config.cornerStyle = .medium
+    config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10)
+    let button = UIButton(configuration: config)
+    button.translatesAutoresizingMaskIntoConstraints = false
+    button.addAction(UIAction { [weak self] _ in
+      self?.handleSpeedDelta(delta)
+    }, for: .touchUpInside)
+    return button
+  }
+
+  private func handleSpeedDelta(_ delta: Double) {
+    let newSpeed = max(0.25, min(2.0, (playbackSpeed * 100 + delta * 100).rounded() / 100))
+    guard newSpeed != playbackSpeed else { return }
+    playbackSpeed = newSpeed
+    updateSpeedLabels()
+    onPlaybackSpeedChanged?(newSpeed)
+  }
+
+  private func updateSpeedLabels() {
+    let text = String(format: "%.2fx", playbackSpeed)
+    frontSpeedLabel.text = text
+    backSpeedLabel.text = text
+  }
+
   private func setUpFront() {
     frontContainer.translatesAutoresizingMaskIntoConstraints = false
-
-    frontVideoTapView.translatesAutoresizingMaskIntoConstraints = false
-    frontVideoTapView.backgroundColor = .clear
-    let tap = UITapGestureRecognizer(target: self, action: #selector(handleFrontVideoTap))
-    frontVideoTapView.addGestureRecognizer(tap)
 
     frontTranscriptRevealContainer.translatesAutoresizingMaskIntoConstraints = false
     frontTranscriptRevealContainer.backgroundColor = .secondarySystemBackground
@@ -153,10 +233,13 @@ final class SRSCardReviewView: UIView {
     frontTranscriptLabel.translatesAutoresizingMaskIntoConstraints = false
     frontTranscriptRevealContainer.addSubview(frontTranscriptLabel)
 
-    Self.styleAction(frontReplayButton, title: "Replay", hotkey: "R", backgroundColor: .systemBlue)
-    frontReplayButton.addTarget(self, action: #selector(handleFrontReplayTap), for: .touchUpInside)
+    Self.styleAction(frontToggleButton, title: "Toggle Thumbnail", hotkey: "T", backgroundColor: .systemGray)
+    frontToggleButton.addTarget(self, action: #selector(handleToggleTap), for: .touchUpInside)
 
-    Self.styleAction(frontRevealBackButton, title: "Reveal Back", hotkey: "Space", backgroundColor: .systemIndigo)
+    Self.styleAction(frontPlayButton, title: "Play", hotkey: "Space", backgroundColor: .systemBlue)
+    frontPlayButton.addTarget(self, action: #selector(handlePlayTap), for: .touchUpInside)
+
+    Self.styleAction(frontRevealBackButton, title: "Reveal Back", hotkey: "Return", backgroundColor: .systemIndigo)
     frontRevealBackButton.addTarget(self, action: #selector(handleFrontRevealBackTap), for: .touchUpInside)
 
     NSLayoutConstraint.activate([
@@ -188,6 +271,9 @@ final class SRSCardReviewView: UIView {
     backTranslationLabel.numberOfLines = 0
     backTranslationLabel.translatesAutoresizingMaskIntoConstraints = false
 
+    Self.styleAction(backPlayButton, title: "Play", hotkey: "Space", backgroundColor: .systemBlue)
+    backPlayButton.addTarget(self, action: #selector(handlePlayTap), for: .touchUpInside)
+
     Self.styleAction(backFailButton, title: "Fail", hotkey: "1", backgroundColor: .systemRed)
     backFailButton.addTarget(self, action: #selector(handleFailTap), for: .touchUpInside)
     Self.styleAction(backPassButton, title: "Pass", hotkey: "2", backgroundColor: .systemGreen)
@@ -206,27 +292,34 @@ final class SRSCardReviewView: UIView {
 
   private func setUpLayout() {
     addSubview(videoStageView)
+    addSubview(clipProgressBar)
     addSubview(frontContainer)
     addSubview(backContainer)
 
-    frontContainer.addSubview(frontVideoTapView)
+    // Front: [Toggle | Play] row, speed row, optional transcript, Reveal Back full-width at bottom
+    let frontTopRow = UIStackView(arrangedSubviews: [frontToggleButton, frontPlayButton])
+    frontTopRow.axis = .horizontal
+    frontTopRow.spacing = 16
+    frontTopRow.translatesAutoresizingMaskIntoConstraints = false
+
+    frontContainer.addSubview(frontTopRow)
+    frontContainer.addSubview(frontSpeedRow)
     frontContainer.addSubview(frontTranscriptRevealContainer)
+    frontContainer.addSubview(frontRevealBackButton)
 
-    let frontButtonsRow = UIStackView.leadingPinnedRow(
-      children: [frontReplayButton, frontRevealBackButton],
-      spacing: 16
-    )
-    frontButtonsRow.translatesAutoresizingMaskIntoConstraints = false
-    frontContainer.addSubview(frontButtonsRow)
+    // Back: Play under video, speed row, streak, transcript + translation, Fail|Pass 50/50 at bottom
+    let backGradeRow = UIStackView(arrangedSubviews: [backFailButton, backPassButton])
+    backGradeRow.axis = .horizontal
+    backGradeRow.spacing = 16
+    backGradeRow.distribution = .fillEqually
+    backGradeRow.translatesAutoresizingMaskIntoConstraints = false
 
-    let backButtonsRow = UIStackView.leadingPinnedRow(
-      children: [backFailButton, backPassButton],
-      spacing: 16
-    )
-    backButtonsRow.translatesAutoresizingMaskIntoConstraints = false
+    backContainer.addSubview(backPlayButton)
+    backContainer.addSubview(backSpeedRow)
+    backContainer.addSubview(backStreakLabel)
     backContainer.addSubview(backTranscriptView)
     backContainer.addSubview(backTranslationLabel)
-    backContainer.addSubview(backButtonsRow)
+    backContainer.addSubview(backGradeRow)
 
     NSLayoutConstraint.activate([
       positionLabel.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 8),
@@ -237,30 +330,46 @@ final class SRSCardReviewView: UIView {
       videoStageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
       videoStageView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
 
-      frontContainer.topAnchor.constraint(equalTo: videoStageView.bottomAnchor, constant: 16),
+      clipProgressBar.topAnchor.constraint(equalTo: videoStageView.bottomAnchor, constant: 6),
+      clipProgressBar.leadingAnchor.constraint(equalTo: videoStageView.leadingAnchor),
+      clipProgressBar.trailingAnchor.constraint(equalTo: videoStageView.trailingAnchor),
+
+      // -- Front --
+      frontContainer.topAnchor.constraint(equalTo: clipProgressBar.bottomAnchor, constant: 12),
       frontContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
       frontContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
-      frontContainer.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -16),
+      frontContainer.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -16),
 
-      frontVideoTapView.topAnchor.constraint(equalTo: frontContainer.topAnchor),
-      frontVideoTapView.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
-      frontVideoTapView.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
-      frontVideoTapView.heightAnchor.constraint(equalToConstant: 1),
+      frontTopRow.topAnchor.constraint(equalTo: frontContainer.topAnchor),
+      frontTopRow.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
 
-      frontTranscriptRevealContainer.topAnchor.constraint(equalTo: frontVideoTapView.bottomAnchor, constant: 12),
+      frontSpeedRow.topAnchor.constraint(equalTo: frontTopRow.bottomAnchor, constant: 12),
+      frontSpeedRow.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
+
+      frontTranscriptRevealContainer.topAnchor.constraint(equalTo: frontSpeedRow.bottomAnchor, constant: 16),
       frontTranscriptRevealContainer.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
       frontTranscriptRevealContainer.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
 
-      frontButtonsRow.topAnchor.constraint(equalTo: frontTranscriptRevealContainer.bottomAnchor, constant: 24),
-      frontButtonsRow.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
-      frontButtonsRow.bottomAnchor.constraint(equalTo: frontContainer.bottomAnchor),
+      frontRevealBackButton.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
+      frontRevealBackButton.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
+      frontRevealBackButton.bottomAnchor.constraint(equalTo: frontContainer.bottomAnchor),
 
-      backContainer.topAnchor.constraint(equalTo: videoStageView.bottomAnchor, constant: 16),
+      // -- Back --
+      backContainer.topAnchor.constraint(equalTo: clipProgressBar.bottomAnchor, constant: 12),
       backContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
       backContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
-      backContainer.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -16),
+      backContainer.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -16),
 
-      backTranscriptView.topAnchor.constraint(equalTo: backContainer.topAnchor),
+      backPlayButton.topAnchor.constraint(equalTo: backContainer.topAnchor),
+      backPlayButton.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+
+      backSpeedRow.topAnchor.constraint(equalTo: backPlayButton.bottomAnchor, constant: 12),
+      backSpeedRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+
+      backStreakLabel.topAnchor.constraint(equalTo: backSpeedRow.bottomAnchor, constant: 4),
+      backStreakLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+
+      backTranscriptView.topAnchor.constraint(equalTo: backStreakLabel.bottomAnchor, constant: 12),
       backTranscriptView.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backTranscriptView.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
@@ -268,10 +377,11 @@ final class SRSCardReviewView: UIView {
       backTranslationLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backTranslationLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
-      backButtonsRow.topAnchor.constraint(equalTo: backTranslationLabel.bottomAnchor, constant: 24),
-      backButtonsRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
-      backButtonsRow.bottomAnchor.constraint(equalTo: backContainer.bottomAnchor),
+      backGradeRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      backGradeRow.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+      backGradeRow.bottomAnchor.constraint(equalTo: backContainer.bottomAnchor),
 
+      // -- Empty --
       emptyLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
       emptyLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
       emptyLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
@@ -291,6 +401,14 @@ final class SRSCardReviewView: UIView {
     backTranscriptView.selectedTermID = termID
   }
 
+  func cycleFrontVideoVisibility() {
+    guard !isShowingBack else { return }
+    stopPlayback()
+    frontVideoVisibility = frontVideoVisibility.next
+    applyVideoStageVisibility()
+    onFrontVideoVisibilityChanged?(frontVideoVisibility)
+  }
+
   func setCard(_ viewModel: SRSCardReviewModels.CardViewModel) {
     emptyLabel.isHidden = true
     positionLabel.text = viewModel.cardPositionLabel
@@ -303,7 +421,8 @@ final class SRSCardReviewView: UIView {
     backTranslationLabel.text = viewModel.englishTranslationText ?? "(no translation)"
     frontTranscriptLabel.text = viewModel.transcriptText
 
-    stopLoop()
+    stopPlayback()
+    clipProgressBar.reset()
 
     let asset = AVURLAsset(url: viewModel.videoFileURL)
     let item = AVPlayerItem(asset: asset)
@@ -313,27 +432,36 @@ final class SRSCardReviewView: UIView {
     self.currentClipEndTime = viewModel.clipEndTimeSeconds
     self.playerView.attach(player: newPlayer)
 
-    // Reset front state for the new card.
-    frontVideoVisibility = .blackThumbnail
+    frontVideoVisibility = viewModel.frontVideoVisibility
+    playbackSpeed = viewModel.playbackSpeed
     isShowingBack = false
     isFrontTranscriptRevealed = false
-    applyFrontVideoVisibility()
+    isVideoPlaying = false
+    playerView.isHidden = true
+    updateSpeedLabels()
+    backStreakLabel.text = "Consecutive correct at this speed: \(viewModel.consecutiveCorrectAtCurrentSpeed)"
+    frontTranscriptRevealContainer.isHidden = !MSRSAppSettings.showFrontTranscript
+    applyVideoStageVisibility()
     updateFrontTranscriptRevealView()
     showFront()
-    startLoop()
+    loadOrGenerateThumbnail(
+      thumbnailFileURL: viewModel.thumbnailFileURL,
+      videoFileURL: viewModel.videoFileURL,
+      atTime: viewModel.clipStartTimeSeconds
+    )
+    playFromStart()
   }
 
   func revealBack() {
     isShowingBack = true
-    // Once revealed, video is always clear regardless of prior front state.
-    frontVideoVisibility = .clearVideo
-    applyFrontVideoVisibility()
+    stopPlayback()
+    applyVideoStageVisibility()
     frontContainer.isHidden = true
     backContainer.isHidden = false
   }
 
   func replay() {
-    startLoop()
+    playFromStart()
   }
 
   func showEmptyState(message: String) {
@@ -342,7 +470,12 @@ final class SRSCardReviewView: UIView {
     videoStageView.isHidden = true
     frontContainer.isHidden = true
     backContainer.isHidden = true
-    stopLoop()
+    stopPlayback()
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    updateBlurFrame()
   }
 
   // MARK: - Private layout
@@ -352,22 +485,26 @@ final class SRSCardReviewView: UIView {
     backContainer.isHidden = true
   }
 
-  private func applyFrontVideoVisibility() {
+  private func applyVideoStageVisibility() {
     if isShowingBack {
+      playerView.isHidden = !isVideoPlaying
       blackMaskView.isHidden = true
-      blurOverlayView.isHidden = true
+      blurContainerView.isHidden = true
       return
     }
+
+    playerView.isHidden = true
+
     switch frontVideoVisibility {
-    case .blackThumbnail:
+    case .blackScreen:
       blackMaskView.isHidden = false
-      blurOverlayView.isHidden = true
-    case .blurredVideo:
+      blurContainerView.isHidden = true
+    case .blurredThumbnail:
       blackMaskView.isHidden = true
-      blurOverlayView.isHidden = false
-    case .clearVideo:
+      blurContainerView.isHidden = false
+    case .clearThumbnail:
       blackMaskView.isHidden = true
-      blurOverlayView.isHidden = true
+      blurContainerView.isHidden = true
     }
   }
 
@@ -381,84 +518,131 @@ final class SRSCardReviewView: UIView {
     }
   }
 
-  // MARK: - Looping
+  private func updateBlurFrame() {
+    guard let imageSize = thumbnailImageView.image?.size,
+          imageSize.width > 0, imageSize.height > 0 else {
+      blurOverlayView.frame = blurContainerView.bounds
+      return
+    }
+    let viewSize = thumbnailImageView.bounds.size
+    guard viewSize.width > 0, viewSize.height > 0 else { return }
+    let scaleX = viewSize.width / imageSize.width
+    let scaleY = viewSize.height / imageSize.height
+    let scale = min(scaleX, scaleY)
+    let renderedWidth = imageSize.width * scale
+    let renderedHeight = imageSize.height * scale
+    let x = (viewSize.width - renderedWidth) / 2
+    let y = (viewSize.height - renderedHeight) / 2
+    blurOverlayView.frame = CGRect(x: x, y: y, width: renderedWidth, height: renderedHeight)
+  }
 
-  private func startLoop() {
-    guard let player = self.player else { return }
-    isLooping = true
-    pendingLoopRestartTask?.cancel()
-    pendingLoopRestartTask = nil
+  // MARK: - Playback
+
+  private func playFromStart() {
+    guard let player else { return }
+    stopPlayback()
+    isVideoPlaying = true
+    applyVideoStageVisibility()
     let startCMTime = CMTime(seconds: currentClipStartTime, preferredTimescale: 600)
     player.seek(to: startCMTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
       Task { @MainActor [weak self] in
-        guard let self = self, self.isLooping else { return }
-        player.play()
-        self.installLoopObserver()
+        guard let self, self.isVideoPlaying else { return }
+        player.rate = Float(self.playbackSpeed)
+        self.installEndObserver()
       }
     }
   }
 
-  private func stopLoop() {
-    isLooping = false
-    pendingLoopRestartTask?.cancel()
-    pendingLoopRestartTask = nil
+  private func stopPlayback() {
+    isVideoPlaying = false
     player?.pause()
-    removeLoopObserver()
+    removeEndObserver()
   }
 
-  private func installLoopObserver() {
-    removeLoopObserver()
+  private func installEndObserver() {
+    removeEndObserver()
     let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
-    loopObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
+    endObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
       Task { @MainActor [weak self] in
-        guard let self = self,
-              self.isLooping,
-              let player = self.player else { return }
+        guard let self, self.isVideoPlaying, let player = self.player else { return }
+        let currentSeconds = CMTimeGetSeconds(player.currentTime())
+        let duration = self.currentClipEndTime - self.currentClipStartTime
+        if duration > 0 {
+          self.clipProgressBar.setProgress((currentSeconds - self.currentClipStartTime) / duration)
+        }
         let endCMTime = CMTime(seconds: self.currentClipEndTime, preferredTimescale: 600)
         if CMTimeCompare(player.currentTime(), endCMTime) >= 0 {
-          self.scheduleLoopRestart()
+          self.clipProgressBar.setProgress(1)
+          player.pause()
+          self.isVideoPlaying = false
+          self.removeEndObserver()
+          self.applyVideoStageVisibility()
         }
       }
     }
   }
 
-  private func removeLoopObserver() {
-    if let observer = loopObserver {
+  private func removeEndObserver() {
+    if let observer = endObserver {
       player?.removeTimeObserver(observer)
-      loopObserver = nil
+      endObserver = nil
     }
   }
 
-  private func scheduleLoopRestart() {
-    guard let player = self.player, isLooping else { return }
-    player.pause()
-    removeLoopObserver()
-    pendingLoopRestartTask?.cancel()
-    pendingLoopRestartTask = Task { @MainActor [weak self] in
-      try? await Task.sleep(nanoseconds: UInt64(Self.loopGapSeconds * 1_000_000_000))
-      guard let self = self, self.isLooping else { return }
-      self.startLoop()
+  // MARK: - Thumbnail
+
+  private func loadOrGenerateThumbnail(
+    thumbnailFileURL: URL,
+    videoFileURL: URL,
+    atTime time: TimeInterval
+  ) {
+    thumbnailTask?.cancel()
+    thumbnailImageView.image = nil
+    thumbnailTask = Task { [weak self] in
+      if let cached = UIImage(contentsOfFile: thumbnailFileURL.path) {
+        guard !Task.isCancelled else { return }
+        await MainActor.run {
+          self?.thumbnailImageView.image = cached
+          self?.updateBlurFrame()
+        }
+        return
+      }
+      let asset = AVURLAsset(url: videoFileURL)
+      let generator = AVAssetImageGenerator(asset: asset)
+      generator.appliesPreferredTrackTransform = true
+      generator.requestedTimeToleranceBefore = .zero
+      generator.requestedTimeToleranceAfter = CMTime(seconds: 1, preferredTimescale: 600)
+      let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+      do {
+        let (cgImage, _) = try await generator.image(at: cmTime)
+        guard !Task.isCancelled else { return }
+        let image = UIImage(cgImage: cgImage)
+        if let jpegData = image.jpegData(compressionQuality: 0.85) {
+          try? jpegData.write(to: thumbnailFileURL, options: .atomic)
+        }
+        await MainActor.run {
+          self?.thumbnailImageView.image = image
+          self?.updateBlurFrame()
+        }
+      } catch {
+        // Thumbnail generation failed — black background is the fallback.
+      }
     }
   }
 
   // MARK: - Actions
 
-  @objc private func handleFrontVideoTap() {
-    switch frontVideoVisibility {
-    case .blackThumbnail: frontVideoVisibility = .blurredVideo
-    case .blurredVideo: frontVideoVisibility = .clearVideo
-    case .clearVideo: break
-    }
-    applyFrontVideoVisibility()
+  @objc private func handleToggleTap() {
+    cycleFrontVideoVisibility()
+  }
+
+  @objc private func handlePlayTap() {
+    onReplayTapped?()
   }
 
   @objc private func handleFrontTranscriptRevealTap() {
     isFrontTranscriptRevealed = true
     updateFrontTranscriptRevealView()
-  }
-
-  @objc private func handleFrontReplayTap() {
-    onReplayTapped?()
   }
 
   @objc private func handleFrontRevealBackTap() {

@@ -185,6 +185,19 @@ extension MediaListeningSRSDatabaseClient {
       """)
     }
 
+    migrator.registerMigration("3") { db in
+      try db.alter(table: "srsCardRecord") { t in
+        t.add(column: "frontVideoVisibilityRawValue", .integer).notNull().defaults(to: 0)
+      }
+    }
+
+    migrator.registerMigration("4") { db in
+      try db.alter(table: "srsCardRecord") { t in
+        t.add(column: "playbackSpeed", .double).notNull().defaults(to: 1.0)
+        t.add(column: "consecutiveCorrectAtCurrentSpeed", .integer).notNull().defaults(to: 0)
+      }
+    }
+
     return migrator
   }
 }
