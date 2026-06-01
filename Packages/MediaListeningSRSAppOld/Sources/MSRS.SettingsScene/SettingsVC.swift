@@ -7,6 +7,7 @@ public final class SettingsVC: UIViewController {
   private var retentionSlider: UISlider?
   private var retentionValueLabel: UILabel?
   private var coverageThresholdTextField: UITextField?
+  private var inactivityTimeoutTextField: UITextField?
 
   public init() {
     super.init(nibName: nil, bundle: nil)
@@ -54,6 +55,14 @@ public final class SettingsVC: UIViewController {
     sender.text = "\(clamped)"
   }
 
+  @objc private func inactivityTimeoutEditingDidEnd(_ sender: UITextField) {
+    let text = sender.text ?? ""
+    let parsed = Int(text) ?? MSRSAppSettings.studySessionInactivityTimeoutDefault
+    let clamped = max(30, parsed)
+    MSRSAppSettings.studySessionInactivityTimeout = clamped
+    sender.text = "\(clamped)"
+  }
+
   private func formatRetention(_ value: Double) -> String {
     "\(Int(value * 100))%"
   }
@@ -61,7 +70,7 @@ public final class SettingsVC: UIViewController {
 
 extension SettingsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 4 }
+  public func numberOfSections(in tableView: UITableView) -> Int { 5 }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 1 }
 
@@ -71,6 +80,7 @@ extension SettingsVC: UITableViewDataSource {
     case 1: return "SRS Review"
     case 2: return "SRS Scheduling"
     case 3: return "Candidate Filtering"
+    case 4: return "Study Tracking"
     default: return nil
     }
   }
@@ -85,6 +95,8 @@ extension SettingsVC: UITableViewDataSource {
       return "Lower retention = longer intervals between reviews (more aggressive). Higher retention = shorter intervals (more conservative). Default is 90%. Takes effect on the next review of each card."
     case 3:
       return "Candidates where all tagged words are either known or already covered by this many cards will be auto-filtered from the processing queue. Only affects new imports and card creations going forward."
+    case 4:
+      return "If no review action occurs within this many seconds, the current study session ends. The next review action starts a new session. Default is 300 seconds (5 minutes)."
     default:
       return nil
     }
@@ -174,6 +186,40 @@ extension SettingsVC: UITableViewDataSource {
       textField.widthAnchor.constraint(equalToConstant: 80).isActive = true
       textField.addTarget(self, action: #selector(coverageThresholdEditingDidEnd(_:)), for: .editingDidEnd)
       coverageThresholdTextField = textField
+
+      let row = UIStackView(arrangedSubviews: [label, textField])
+      row.axis = .horizontal
+      row.spacing = 12
+      row.alignment = .center
+      row.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(row)
+      NSLayoutConstraint.activate([
+        row.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        row.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        row.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        row.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+      ])
+      return cell
+
+    case 4:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = ""
+
+      let label = UILabel()
+      label.text = "Inactivity Timeout (seconds)"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+      let textField = UITextField()
+      textField.text = "\(MSRSAppSettings.studySessionInactivityTimeout)"
+      textField.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      textField.textAlignment = .right
+      textField.keyboardType = .numberPad
+      textField.borderStyle = .roundedRect
+      textField.widthAnchor.constraint(equalToConstant: 80).isActive = true
+      textField.addTarget(self, action: #selector(inactivityTimeoutEditingDidEnd(_:)), for: .editingDidEnd)
+      inactivityTimeoutTextField = textField
 
       let row = UIStackView(arrangedSubviews: [label, textField])
       row.axis = .horizontal

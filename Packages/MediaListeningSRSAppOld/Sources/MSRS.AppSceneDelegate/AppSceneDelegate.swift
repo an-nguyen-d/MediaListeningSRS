@@ -1,6 +1,7 @@
 import UIKit
 import MSRS_AppDependencies
 import MSRS_MediaSourcesListScene
+import MSRS_StudyStatsScene
 import MSRS_WordsListScene
 
 open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -28,8 +29,12 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
     let wordsNav = UINavigationController(rootViewController: wordsListVC)
     wordsNav.tabBarItem = UITabBarItem(title: "Words", image: UIImage(systemName: "textformat.abc"), tag: 1)
 
+    let studyStatsVC = StudyStatsVC(dependencies: dependencies)
+    let statsNav = UINavigationController(rootViewController: studyStatsVC)
+    statsNav.tabBarItem = UITabBarItem(title: "Stats", image: UIImage(systemName: "chart.bar"), tag: 2)
+
     let tabBarController = UITabBarController()
-    tabBarController.viewControllers = [mediaNav, wordsNav]
+    tabBarController.viewControllers = [mediaNav, wordsNav, statsNav]
 
     let window = UIWindow(windowScene: windowScene)
     window.rootViewController = tabBarController

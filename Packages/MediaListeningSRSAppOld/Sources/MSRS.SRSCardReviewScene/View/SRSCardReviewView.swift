@@ -440,6 +440,10 @@ final class SRSCardReviewView: UIView {
     playerView.isHidden = true
     updateSpeedLabels()
     backStreakLabel.text = "Consecutive correct at this speed: \(viewModel.consecutiveCorrectAtCurrentSpeed)"
+    updateGradeButtonTitles(
+      failInterval: viewModel.failIntervalSeconds,
+      passInterval: viewModel.passIntervalSeconds
+    )
     frontTranscriptRevealContainer.isHidden = !MSRSAppSettings.showFrontTranscript
     applyVideoStageVisibility()
     updateFrontTranscriptRevealView()
@@ -654,6 +658,37 @@ final class SRSCardReviewView: UIView {
 
   @objc private func handlePassTap() {
     onGraded?(.pass)
+  }
+
+  private func updateGradeButtonTitles(
+    failInterval: TimeInterval?,
+    passInterval: TimeInterval?
+  ) {
+    let failTitle = failInterval.map { "Fail · \(Self.formatInterval($0))" } ?? "Fail"
+    let passTitle = passInterval.map { "Pass · \(Self.formatInterval($0))" } ?? "Pass"
+    backFailButton.configuration?.title = failTitle
+    backPassButton.configuration?.title = passTitle
+  }
+
+  private static func formatInterval(_ seconds: TimeInterval) -> String {
+    let totalSeconds = Int(seconds)
+    if totalSeconds < 60 {
+      return "\(max(1, totalSeconds))s"
+    }
+    let minutes = totalSeconds / 60
+    if minutes < 60 {
+      return "\(minutes)m"
+    }
+    let hours = minutes / 60
+    if hours < 24 {
+      return "\(hours)h"
+    }
+    let days = hours / 24
+    if days < 31 {
+      return "\(days)d"
+    }
+    let months = days / 30
+    return "\(months)mo"
   }
 
   // MARK: - Helpers

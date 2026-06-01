@@ -47,6 +47,8 @@ public enum SRSCardReviewModels {
     public let thumbnailFileURL: URL
     public let playbackSpeed: Double
     public let consecutiveCorrectAtCurrentSpeed: Int
+    public let failIntervalSeconds: TimeInterval?
+    public let passIntervalSeconds: TimeInterval?
 
     public init(
       cardID: SRSCardModel.ID,
@@ -60,7 +62,9 @@ public enum SRSCardReviewModels {
       frontVideoVisibility: SRSCardModel.FrontVideoVisibility,
       thumbnailFileURL: URL,
       playbackSpeed: Double,
-      consecutiveCorrectAtCurrentSpeed: Int
+      consecutiveCorrectAtCurrentSpeed: Int,
+      failIntervalSeconds: TimeInterval? = nil,
+      passIntervalSeconds: TimeInterval? = nil
     ) {
       self.cardID = cardID
       self.videoFileURL = videoFileURL
@@ -74,6 +78,8 @@ public enum SRSCardReviewModels {
       self.thumbnailFileURL = thumbnailFileURL
       self.playbackSpeed = playbackSpeed
       self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed
+      self.failIntervalSeconds = failIntervalSeconds
+      self.passIntervalSeconds = passIntervalSeconds
     }
   }
 

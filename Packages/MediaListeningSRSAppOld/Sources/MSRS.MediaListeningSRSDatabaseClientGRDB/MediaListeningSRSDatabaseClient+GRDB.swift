@@ -41,7 +41,8 @@ extension MediaListeningSRSDatabaseClient {
       mediaSource: Self.mediaSourceEndpoints(databaseWriter: databaseWriter),
       mediaSourceCardCandidate: Self.mediaSourceCardCandidateEndpoints(databaseWriter: databaseWriter),
       srsCard: Self.srsCardEndpoints(databaseWriter: databaseWriter, fsrsParameters: fsrsParameters),
-      japaneseTerm: Self.japaneseTermEndpoints(databaseWriter: databaseWriter)
+      japaneseTerm: Self.japaneseTermEndpoints(databaseWriter: databaseWriter),
+      studySession: Self.studySessionEndpoints(databaseWriter: databaseWriter)
     )
   }
 
@@ -196,6 +197,20 @@ extension MediaListeningSRSDatabaseClient {
         t.add(column: "playbackSpeed", .double).notNull().defaults(to: 1.0)
         t.add(column: "consecutiveCorrectAtCurrentSpeed", .integer).notNull().defaults(to: 0)
       }
+    }
+
+    migrator.registerMigration("5") { db in
+      try db.create(table: "studySessionRecord") { t in
+        t.autoIncrementedPrimaryKey("id")
+        t.column("startedAt", .datetime).notNull()
+        t.column("endedAt", .datetime).notNull()
+        t.column("cardsReviewed", .integer).notNull().defaults(to: 0)
+      }
+      try db.create(
+        index: "idx_ssr_startedAt",
+        on: "studySessionRecord",
+        columns: ["startedAt"]
+      )
     }
 
     return migrator

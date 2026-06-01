@@ -90,4 +90,22 @@ internal enum GRDBMapper {
       )
     }
   }
+
+  // MARK: - StudySession
+
+  internal enum StudySession {
+
+    internal static func mapToModel(from record: StudySessionRecord) -> StudySessionModel {
+      guard let rawID = record.id else {
+        fatalError("StudySessionRecord missing id after fetch")
+      }
+
+      return .init(
+        id: .init(rawValue: rawID),
+        startedAt: record.startedAt,
+        endedAt: record.endedAt,
+        cardsReviewed: record.cardsReviewed
+      )
+    }
+  }
 }

@@ -59,4 +59,20 @@ public enum MSRSAppSettings {
       UserDefaults.standard.set(max(1, newValue), forKey: minimumCardCoverageCountKey)
     }
   }
+
+  private static let studySessionInactivityTimeoutKey = "MSRS.Settings.studySessionInactivityTimeout"
+  public static let studySessionInactivityTimeoutDefault: Int = 300
+
+  public static var studySessionInactivityTimeout: Int {
+    get {
+      if UserDefaults.standard.object(forKey: studySessionInactivityTimeoutKey) == nil {
+        return studySessionInactivityTimeoutDefault
+      }
+      let value = UserDefaults.standard.integer(forKey: studySessionInactivityTimeoutKey)
+      return max(30, value)
+    }
+    set {
+      UserDefaults.standard.set(max(30, newValue), forKey: studySessionInactivityTimeoutKey)
+    }
+  }
 }

@@ -69,6 +69,7 @@ enum PackageTarget: String, CaseIterable {
   case SettingsScene
   case SRSCardReviewScene
   case Shared
+  case StudyStatsScene
   case SharedModels
   case WordsListScene
 
@@ -121,6 +122,7 @@ enum PackageTarget: String, CaseIterable {
           .MediaSourcesListScene,
           .Shared,
           .SharedModels,
+          .StudyStatsScene,
           .WordsListScene
         ) + [
         ]
@@ -303,6 +305,15 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.iYomi.Product.DictionaryUIKit.targetDependency,
           PackageDependency.iYomi.Product.JapaneseModels.targetDependency,
           PackageDependency.iYomi.Product.JapaneseTextClient.targetDependency,
+        ]
+      )
+
+    case .StudyStatsScene:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+          .MediaListeningSRSDatabaseClient,
+          .SharedModels
+        ) + [
         ]
       )
 

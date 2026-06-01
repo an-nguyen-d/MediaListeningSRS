@@ -295,6 +295,23 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
     public var updateFrontVideoVisibility: @Sendable (UpdateFrontVideoVisibility.Request) async throws -> UpdateFrontVideoVisibility.Response
     public var updatePlaybackSpeed: @Sendable (UpdatePlaybackSpeed.Request) async throws -> UpdatePlaybackSpeed.Response
 
+    public enum PreviewNextIntervals {
+      public struct Request: Sendable {
+        public let cardID: SRSCardModel.ID
+        public init(cardID: SRSCardModel.ID) { self.cardID = cardID }
+      }
+      public struct Response: Sendable, Equatable {
+        public let failIntervalSeconds: TimeInterval
+        public let passIntervalSeconds: TimeInterval
+        public init(failIntervalSeconds: TimeInterval, passIntervalSeconds: TimeInterval) {
+          self.failIntervalSeconds = failIntervalSeconds
+          self.passIntervalSeconds = passIntervalSeconds
+        }
+      }
+    }
+
+    public var previewNextIntervals: @Sendable (PreviewNextIntervals.Request) async throws -> PreviewNextIntervals.Response
+
     public init(
       create: @Sendable @escaping (Create.Request) async throws -> Create.Response,
       delete: @Sendable @escaping (Delete.Request) async throws -> Delete.Response,
@@ -303,7 +320,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       recordReview: @Sendable @escaping (RecordReview.Request) async throws -> RecordReview.Response,
       fetchDueCards: @Sendable @escaping (FetchDueCards.Request) async throws -> FetchDueCards.Response,
       updateFrontVideoVisibility: @Sendable @escaping (UpdateFrontVideoVisibility.Request) async throws -> UpdateFrontVideoVisibility.Response,
-      updatePlaybackSpeed: @Sendable @escaping (UpdatePlaybackSpeed.Request) async throws -> UpdatePlaybackSpeed.Response
+      updatePlaybackSpeed: @Sendable @escaping (UpdatePlaybackSpeed.Request) async throws -> UpdatePlaybackSpeed.Response,
+      previewNextIntervals: @Sendable @escaping (PreviewNextIntervals.Request) async throws -> PreviewNextIntervals.Response
     ) {
       self.create = create
       self.delete = delete
@@ -313,6 +331,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       self.fetchDueCards = fetchDueCards
       self.updateFrontVideoVisibility = updateFrontVideoVisibility
       self.updatePlaybackSpeed = updatePlaybackSpeed
+      self.previewNextIntervals = previewNextIntervals
     }
   }
   public var srsCard: SRSCard
@@ -438,15 +457,98 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
   }
   public var japaneseTerm: JapaneseTerm
 
+  // MARK: - StudySession
+
+  public struct StudySession: Sendable {
+
+    public enum CreateSession {
+      public struct Request: Sendable {
+        public let startedAt: Date
+        public let endedAt: Date
+        public let cardsReviewed: Int
+        public init(startedAt: Date, endedAt: Date, cardsReviewed: Int) {
+          self.startedAt = startedAt
+          self.endedAt = endedAt
+          self.cardsReviewed = cardsReviewed
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public let model: StudySessionModel
+        public init(model: StudySessionModel) { self.model = model }
+      }
+    }
+
+    public enum UpdateSession {
+      public struct Request: Sendable {
+        public let id: StudySessionModel.ID
+        public let endedAt: Date
+        public let cardsReviewed: Int
+        public init(id: StudySessionModel.ID, endedAt: Date, cardsReviewed: Int) {
+          self.id = id
+          self.endedAt = endedAt
+          self.cardsReviewed = cardsReviewed
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public init() {}
+      }
+    }
+
+    public enum FetchMostRecent {
+      public struct Request: Sendable {
+        public init() {}
+      }
+      public struct Response: Sendable, Equatable {
+        public let model: StudySessionModel?
+        public init(model: StudySessionModel?) { self.model = model }
+      }
+    }
+
+    public enum FetchInDateRange {
+      public struct Request: Sendable {
+        public let startDate: Date
+        public let endDate: Date
+        public init(startDate: Date, endDate: Date) {
+          self.startDate = startDate
+          self.endDate = endDate
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public let models: [StudySessionModel]
+        public init(models: [StudySessionModel]) { self.models = models }
+      }
+    }
+
+    public var createSession: @Sendable (CreateSession.Request) async throws -> CreateSession.Response
+    public var updateSession: @Sendable (UpdateSession.Request) async throws -> UpdateSession.Response
+    public var fetchMostRecent: @Sendable (FetchMostRecent.Request) async throws -> FetchMostRecent.Response
+    public var fetchInDateRange: @Sendable (FetchInDateRange.Request) async throws -> FetchInDateRange.Response
+
+    public init(
+      createSession: @Sendable @escaping (CreateSession.Request) async throws -> CreateSession.Response,
+      updateSession: @Sendable @escaping (UpdateSession.Request) async throws -> UpdateSession.Response,
+      fetchMostRecent: @Sendable @escaping (FetchMostRecent.Request) async throws -> FetchMostRecent.Response,
+      fetchInDateRange: @Sendable @escaping (FetchInDateRange.Request) async throws -> FetchInDateRange.Response
+    ) {
+      self.createSession = createSession
+      self.updateSession = updateSession
+      self.fetchMostRecent = fetchMostRecent
+      self.fetchInDateRange = fetchInDateRange
+    }
+  }
+  public var studySession: StudySession
+
   public init(
     mediaSource: MediaSource,
     mediaSourceCardCandidate: MediaSourceCardCandidate,
     srsCard: SRSCard,
-    japaneseTerm: JapaneseTerm
+    japaneseTerm: JapaneseTerm,
+    studySession: StudySession
   ) {
     self.mediaSource = mediaSource
     self.mediaSourceCardCandidate = mediaSourceCardCandidate
     self.srsCard = srsCard
     self.japaneseTerm = japaneseTerm
+    self.studySession = studySession
   }
 }

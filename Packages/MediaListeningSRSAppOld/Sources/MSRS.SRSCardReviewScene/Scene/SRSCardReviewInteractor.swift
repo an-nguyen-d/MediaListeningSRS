@@ -38,6 +38,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   }
   private var sourceCachesByID: [MediaSourceModel.ID: SourceCache] = [:]
   private var fullyKnownTermIDs: Set<Int64> = []
+  private let studySessionTracker: StudySessionTracker
 
   init(
     presenter: SRSCardReviewPresenter,
@@ -55,6 +56,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     self.dictionaryClient = dictionaryClient
     self.srtParserClient = srtParserClient
     self.exportedClipsDirectoryURL = exportedClipsDirectoryURL
+    self.studySessionTracker = StudySessionTracker(dbClient: mediaListeningSRSDatabaseClient)
   }
 
   func sendAction(_ action: SRSCardReviewModels.Action) {
@@ -62,6 +64,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     case .viewDidLoad:
       handleViewDidLoad()
     case .revealBackTapped:
+      studySessionTracker.recordHeartbeat(isCardReview: false)
       presenter.presentRevealBack()
     case .replayTapped:
       presenter.presentReplay()
@@ -70,6 +73,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     case .markTermAsFullyKnown(let termID):
       handleMarkTermAsFullyKnown(termID)
     case .gradedAndNext(let grade):
+      studySessionTracker.recordHeartbeat(isCardReview: true)
       handleGraded(grade)
     case .frontVideoVisibilityChanged(let visibility):
       handleFrontVideoVisibilityChanged(visibility)
@@ -200,16 +204,20 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   private func emitCurrentCard() {
     guard currentIndex < cards.count else { return }
     let card = cards[currentIndex]
-    if let cache = sourceCachesByID[card.mediaSourceID] {
-      buildAndPresent(card: card, cache: cache)
-      return
-    }
-    Task { [weak self] in
-      guard let self = self else { return }
+    Task { [weak self, mediaListeningSRSDatabaseClient] in
+      guard let self else { return }
       do {
         let cache = try await self.ensureSourceCache(mediaSourceID: card.mediaSourceID)
+        let intervals = try? await mediaListeningSRSDatabaseClient.srsCard.previewNextIntervals(
+          .init(cardID: card.id)
+        )
         await MainActor.run {
-          self.buildAndPresent(card: card, cache: cache)
+          self.buildAndPresent(
+            card: card,
+            cache: cache,
+            failIntervalSeconds: intervals?.failIntervalSeconds,
+            passIntervalSeconds: intervals?.passIntervalSeconds
+          )
         }
       } catch {
         await MainActor.run {
@@ -219,7 +227,12 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     }
   }
 
-  private func buildAndPresent(card: SRSCardModel, cache: SourceCache) {
+  private func buildAndPresent(
+    card: SRSCardModel,
+    cache: SourceCache,
+    failIntervalSeconds: TimeInterval? = nil,
+    passIntervalSeconds: TimeInterval? = nil
+  ) {
     var joinedParts: [String] = []
     var labeledRanges: [HighlightableTranscriptLabeledRange] = []
     var runningUTF16Offset: Int = 0
@@ -267,7 +280,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       frontVideoVisibility: card.frontVideoVisibility,
       thumbnailFileURL: thumbnailFileURL,
       playbackSpeed: card.playbackSpeed,
-      consecutiveCorrectAtCurrentSpeed: card.consecutiveCorrectAtCurrentSpeed
+      consecutiveCorrectAtCurrentSpeed: card.consecutiveCorrectAtCurrentSpeed,
+      failIntervalSeconds: failIntervalSeconds,
+      passIntervalSeconds: passIntervalSeconds
     ))
   }
 

@@ -249,6 +249,47 @@ extension MediaListeningSRSDatabaseClient {
           try record.update(db)
           return .init()
         }
+      },
+      previewNextIntervals: { request in
+        try await databaseWriter.read { db in
+          guard let record = try SRSCardRecord.fetchOne(db, key: request.cardID.rawValue) else {
+            throw MediaListeningSRSDatabaseError.recordNotFound(id: request.cardID.rawValue)
+          }
+          let now = Date()
+          let cardState = CardState(rawValue: record.stateRawValue) ?? .new
+          let currentCard = Card(
+            due: record.dueDate ?? now,
+            stability: record.stability,
+            difficulty: record.difficulty,
+            elapsedDays: record.elapsedDays,
+            scheduledDays: record.scheduledDays,
+            reps: record.repCount,
+            lapses: record.lapseCount,
+            state: cardState,
+            lastReview: record.lastReviewDate
+          )
+
+          var reviewParameters = fsrsParameters
+          if let userRetention = UserDefaults.standard.object(forKey: "MSRS.Settings.desiredRetention") as? Double {
+            reviewParameters = FSRSParameters(
+              requestRetention: userRetention,
+              maximumInterval: fsrsParameters.maximumInterval,
+              w: fsrsParameters.w,
+              enableFuzz: fsrsParameters.enableFuzz,
+              enableShortTerm: fsrsParameters.enableShortTerm
+            )
+          }
+          let fsrs = FSRS(parameters: reviewParameters)
+          let preview = fsrs.repeat(card: currentCard, now: now)
+
+          let failDue = preview[.again]?.card.due ?? now
+          let passDue = preview[.good]?.card.due ?? now
+
+          return .init(
+            failIntervalSeconds: max(0, failDue.timeIntervalSince(now)),
+            passIntervalSeconds: max(0, passDue.timeIntervalSince(now))
+          )
+        }
       }
     )
   }
