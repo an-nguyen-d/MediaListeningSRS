@@ -39,6 +39,8 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   private var sourceCachesByID: [MediaSourceModel.ID: SourceCache] = [:]
   private var fullyKnownTermIDs: Set<Int64> = []
   private let studySessionTracker: StudySessionTracker
+  private var currentTranscriptText: String = ""
+  private var currentEnglishTranslationText: String?
 
   init(
     presenter: SRSCardReviewPresenter,
@@ -79,6 +81,11 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       handleFrontVideoVisibilityChanged(visibility)
     case .playbackSpeedChanged(let speed):
       handlePlaybackSpeedChanged(speed)
+    case .submitTypedAnswer(let answer):
+      studySessionTracker.recordHeartbeat(isCardReview: false)
+      presenter.presentRevealBack()
+      presenter.presentLLMGradingStarted(userAnswer: answer)
+      handleLLMGrading(learnerAnswer: answer)
     }
   }
 
@@ -275,6 +282,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       .compactMap { cache.englishTranslationsByIndex[$0] }
     let translationText = translationParts.isEmpty ? nil : translationParts.joined(separator: "\n")
 
+    self.currentTranscriptText = transcriptText
+    self.currentEnglishTranslationText = translationText
+
     let clipFileURL = exportedClipsDirectoryURL.appendingPathComponent(card.clipRelativeFilePath)
     let thumbnailFileURL = clipFileURL.deletingPathExtension().appendingPathExtension("jpg")
 
@@ -285,9 +295,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
 
     presenter.presentCard(.init(
       cardID: card.id,
-      videoFileURL: cache.videoFileURL,
-      clipStartTimeSeconds: card.clipStartTimeSeconds,
-      clipEndTimeSeconds: card.clipEndTimeSeconds,
+      videoFileURL: clipFileURL,
+      clipStartTimeSeconds: 0,
+      clipEndTimeSeconds: card.clipEndTimeSeconds - card.clipStartTimeSeconds,
       transcriptText: transcriptText,
       transcriptLabeledRanges: labeledRanges,
       inflectionAnnotationsText: inflectionAnnotationsText,
@@ -300,6 +310,30 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       failIntervalSeconds: failIntervalSeconds,
       passIntervalSeconds: passIntervalSeconds
     ))
+  }
+
+  private func handleLLMGrading(learnerAnswer: String) {
+    let transcript = currentTranscriptText
+    let translation = currentEnglishTranslationText
+    Task { [presenter] in
+      do {
+        let result = try await OllamaGradingHelper.grade(
+          japaneseTranscript: transcript,
+          englishTranslation: translation,
+          learnerResponse: learnerAnswer
+        )
+        await MainActor.run {
+          presenter.presentLLMGradeResult(.init(
+            score: result.score,
+            reasoning: result.reasoning
+          ))
+        }
+      } catch {
+        await MainActor.run {
+          presenter.presentLLMGradingError(error.localizedDescription)
+        }
+      }
+    }
   }
 
   private func ensureSourceCache(mediaSourceID: MediaSourceModel.ID) async throws -> SourceCache {

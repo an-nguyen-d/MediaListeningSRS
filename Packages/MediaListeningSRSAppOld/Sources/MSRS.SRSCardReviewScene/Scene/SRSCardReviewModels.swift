@@ -27,6 +27,7 @@ public enum SRSCardReviewModels {
     case gradedAndNext(Grade)
     case frontVideoVisibilityChanged(SRSCardModel.FrontVideoVisibility)
     case playbackSpeedChanged(Double)
+    case submitTypedAnswer(String)
   }
 
   public enum Grade: Sendable, Equatable {
@@ -83,6 +84,18 @@ public enum SRSCardReviewModels {
       self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed
       self.failIntervalSeconds = failIntervalSeconds
       self.passIntervalSeconds = passIntervalSeconds
+    }
+  }
+
+  public struct LLMGradeResult: Sendable, Equatable {
+    public let score: Int
+    public let reasoning: String
+    public let recommendedGrade: Grade
+
+    public init(score: Int, reasoning: String) {
+      self.score = score
+      self.reasoning = reasoning
+      self.recommendedGrade = score >= 70 ? .pass : .fail
     }
   }
 

@@ -53,6 +53,9 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     contentView.onPlaybackSpeedChanged = { [weak self] speed in
       self?.interactor.sendAction(.playbackSpeedChanged(speed))
     }
+    contentView.onSubmitTypedAnswer = { [weak self] answer in
+      self?.interactor.sendAction(.submitTypedAnswer(answer))
+    }
     interactor.sendAction(.viewDidLoad)
   }
 
@@ -137,6 +140,18 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
 
   func displayDeckCompleted() {
     contentView.showEmptyState(message: "Deck complete.")
+  }
+
+  func displayLLMGradingStarted(userAnswer: String) {
+    contentView.showLLMGradingStarted(userAnswer: userAnswer)
+  }
+
+  func displayLLMGradeResult(_ result: SRSCardReviewModels.LLMGradeResult) {
+    contentView.showLLMGradeResult(result)
+  }
+
+  func displayLLMGradingError(_ message: String) {
+    contentView.showLLMGradingError(message)
   }
 
   func displayError(_ message: String) {

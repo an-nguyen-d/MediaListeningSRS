@@ -8,6 +8,7 @@ public final class SettingsVC: UIViewController {
   private var retentionValueLabel: UILabel?
   private var coverageThresholdTextField: UITextField?
   private var inactivityTimeoutTextField: UITextField?
+  private var promptTextView: UITextView?
 
   public init() {
     super.init(nibName: nil, bundle: nil)
@@ -23,6 +24,7 @@ public final class SettingsVC: UIViewController {
     title = "Settings"
     view.backgroundColor = .systemGroupedBackground
     tableView.dataSource = self
+    tableView.delegate = self
     tableView.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(tableView)
     NSLayoutConstraint.activate([
@@ -70,7 +72,7 @@ public final class SettingsVC: UIViewController {
 
 extension SettingsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 5 }
+  public func numberOfSections(in tableView: UITableView) -> Int { 6 }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { 1 }
 
@@ -81,6 +83,7 @@ extension SettingsVC: UITableViewDataSource {
     case 2: return "SRS Scheduling"
     case 3: return "Candidate Filtering"
     case 4: return "Study Tracking"
+    case 5: return "LLM Grading"
     default: return nil
     }
   }
@@ -97,6 +100,8 @@ extension SettingsVC: UITableViewDataSource {
       return "Candidates where all tagged words are either known or already covered by this many cards will be auto-filtered from the processing queue. Only affects new imports and card creations going forward."
     case 4:
       return "If no review action occurs within this many seconds, the current study session ends. The next review action starts a new session. Default is 300 seconds (5 minutes)."
+    case 5:
+      return "System prompt sent to the local Ollama LLM when grading typed answers. Tap to edit. The Japanese transcript and English translation are appended automatically."
     default:
       return nil
     }
@@ -235,8 +240,75 @@ extension SettingsVC: UITableViewDataSource {
       ])
       return cell
 
+    case 5:
+      let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+      cell.textLabel?.text = "Grading Prompt"
+      let prompt = MSRSAppSettings.llmGradingPrompt
+      let preview = prompt.prefix(80).replacingOccurrences(of: "\n", with: " ")
+      cell.detailTextLabel?.text = String(preview) + (prompt.count > 80 ? "…" : "")
+      cell.detailTextLabel?.textColor = .secondaryLabel
+      cell.accessoryType = .disclosureIndicator
+      return cell
+
     default:
       return UITableViewCell()
     }
+  }
+}
+
+extension SettingsVC: UITableViewDelegate {
+  public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    tableView.deselectRow(at: indexPath, animated: true)
+    if indexPath.section == 5 {
+      let editor = LLMPromptEditorVC()
+      editor.onSave = { [weak self] in
+        self?.tableView.reloadSections(IndexSet(integer: 5), with: .none)
+      }
+      navigationController?.pushViewController(editor, animated: true)
+    }
+  }
+}
+
+private final class LLMPromptEditorVC: UIViewController {
+
+  private let textView = UITextView()
+  var onSave: (() -> Void)?
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    title = "Grading Prompt"
+    view.backgroundColor = .systemBackground
+
+    navigationItem.rightBarButtonItem = UIBarButtonItem(
+      title: "Reset", style: .plain, target: self, action: #selector(resetToDefault)
+    )
+
+    textView.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
+    textView.text = MSRSAppSettings.llmGradingPrompt
+    textView.autocorrectionType = .no
+    textView.autocapitalizationType = .none
+    textView.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(textView)
+
+    NSLayoutConstraint.activate([
+      textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+      textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+      textView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+      textView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+    ])
+  }
+
+  override func viewWillDisappear(_ animated: Bool) {
+    super.viewWillDisappear(animated)
+    let trimmed = textView.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !trimmed.isEmpty {
+      MSRSAppSettings.llmGradingPrompt = trimmed
+    }
+    onSave?()
+  }
+
+  @objc private func resetToDefault() {
+    textView.text = MSRSAppSettings.llmGradingPromptDefault
+    MSRSAppSettings.llmGradingPrompt = MSRSAppSettings.llmGradingPromptDefault
   }
 }

@@ -6,6 +6,9 @@ protocol SRSCardReviewDisplayer: AnyObject {
   func displayRevealBack()
   func displayReplay()
   func displayDictionaryLookup(_ result: SRSCardReviewModels.DictionaryLookupResult)
+  func displayLLMGradingStarted(userAnswer: String)
+  func displayLLMGradeResult(_ result: SRSCardReviewModels.LLMGradeResult)
+  func displayLLMGradingError(_ message: String)
   func displayEmptyDeck()
   func displayDeckCompleted()
   func displayError(_ message: String)
@@ -30,6 +33,18 @@ final class SRSCardReviewPresenter {
 
   func presentDictionaryLookup(_ result: SRSCardReviewModels.DictionaryLookupResult) {
     displayer?.displayDictionaryLookup(result)
+  }
+
+  func presentLLMGradingStarted(userAnswer: String) {
+    displayer?.displayLLMGradingStarted(userAnswer: userAnswer)
+  }
+
+  func presentLLMGradeResult(_ result: SRSCardReviewModels.LLMGradeResult) {
+    displayer?.displayLLMGradeResult(result)
+  }
+
+  func presentLLMGradingError(_ message: String) {
+    displayer?.displayLLMGradingError(message)
   }
 
   func presentEmptyDeck() {

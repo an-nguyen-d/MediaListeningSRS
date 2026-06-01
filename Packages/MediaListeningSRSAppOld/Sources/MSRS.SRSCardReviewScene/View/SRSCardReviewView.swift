@@ -11,6 +11,7 @@ final class SRSCardReviewView: UIView {
   var onTermTapped: ((Int64) -> Void)?
   var onFrontVideoVisibilityChanged: ((SRSCardModel.FrontVideoVisibility) -> Void)?
   var onPlaybackSpeedChanged: ((Double) -> Void)?
+  var onSubmitTypedAnswer: ((String) -> Void)?
 
   // MARK: - Common
 
@@ -39,7 +40,14 @@ final class SRSCardReviewView: UIView {
   private let frontTranscriptLabel = UILabel()
   private let frontToggleButton = UIButton(type: .system)
   private let frontPlayButton = UIButton(type: .system)
-  private let frontRevealBackButton = UIButton(type: .system)
+  private let frontLoopButton = UIButton(type: .system)
+  private let frontShowBackButton = UIButton(type: .system)
+  private let frontTypeAnswerButton = UIButton(type: .system)
+  private let frontBottomRow = UIStackView()
+  private let frontAnswerRow = UIStackView()
+  private let frontAnswerTextField = UITextField()
+  private let frontSendButton = UIButton(type: .system)
+  private let frontCancelButton = UIButton(type: .system)
 
   // MARK: - Back
 
@@ -48,8 +56,18 @@ final class SRSCardReviewView: UIView {
   private let backInflectionAnnotationsLabel = UILabel()
   private let backTranslationLabel = UILabel()
   private let backPlayButton = UIButton(type: .system)
+  private let backLoopButton = UIButton(type: .system)
   private let backFailButton = UIButton(type: .system)
   private let backPassButton = UIButton(type: .system)
+
+  // MARK: - LLM Result
+
+  private let llmResultContainer = UIView()
+  private let llmUserAnswerLabel = UILabel()
+  private let llmLoadingIndicator = UIActivityIndicatorView(style: .medium)
+  private let llmLoadingLabel = UILabel()
+  private let llmScoreLabel = UILabel()
+  private let llmReasoningLabel = UILabel()
 
   // MARK: - Other
 
@@ -70,6 +88,7 @@ final class SRSCardReviewView: UIView {
   private var thumbnailTask: Task<Void, Never>?
   private var currentThumbnailFileURL: URL?
   private var currentVideoFileURL: URL?
+  private var autoLoopWorkItem: DispatchWorkItem?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -79,6 +98,7 @@ final class SRSCardReviewView: UIView {
     setUpSpeedControls()
     setUpFront()
     setUpBack()
+    setUpLLMResult()
     setUpEmptyLabel()
     setUpLayout()
     showEmptyState(message: "Loading deck…")
@@ -213,6 +233,32 @@ final class SRSCardReviewView: UIView {
     backSpeedLabel.text = text
   }
 
+  private func configureLoopButton(_ button: UIButton) {
+    var config = UIButton.Configuration.tinted()
+    config.title = "Loop"
+    config.cornerStyle = .medium
+    config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14)
+    button.configuration = config
+    button.translatesAutoresizingMaskIntoConstraints = false
+    button.addAction(UIAction { [weak self] _ in
+      self?.handleLoopToggle()
+    }, for: .touchUpInside)
+  }
+
+  private func handleLoopToggle() {
+    MSRSAppSettings.autoLoopVideo.toggle()
+    updateLoopButtons()
+  }
+
+  private func updateLoopButtons() {
+    let isOn = MSRSAppSettings.autoLoopVideo
+    let color: UIColor = isOn ? .systemGreen : .systemGray
+    frontLoopButton.configuration?.baseBackgroundColor = color
+    frontLoopButton.configuration?.baseForegroundColor = isOn ? .white : .label
+    backLoopButton.configuration?.baseBackgroundColor = color
+    backLoopButton.configuration?.baseForegroundColor = isOn ? .white : .label
+  }
+
   private func setUpFront() {
     frontContainer.translatesAutoresizingMaskIntoConstraints = false
 
@@ -242,8 +288,42 @@ final class SRSCardReviewView: UIView {
     Self.styleAction(frontPlayButton, title: "Play", hotkey: "Space", backgroundColor: .systemBlue)
     frontPlayButton.addTarget(self, action: #selector(handlePlayTap), for: .touchUpInside)
 
-    Self.styleAction(frontRevealBackButton, title: "Reveal Back", hotkey: "Return", backgroundColor: .systemIndigo)
-    frontRevealBackButton.addTarget(self, action: #selector(handleFrontRevealBackTap), for: .touchUpInside)
+    configureLoopButton(frontLoopButton)
+
+    Self.styleAction(frontShowBackButton, title: "Show Back", hotkey: "Return", backgroundColor: .systemIndigo)
+    frontShowBackButton.addTarget(self, action: #selector(handleFrontRevealBackTap), for: .touchUpInside)
+
+    Self.styleAction(frontTypeAnswerButton, title: "Type Answer", hotkey: "", backgroundColor: .systemOrange)
+    frontTypeAnswerButton.addTarget(self, action: #selector(handleTypeAnswerTap), for: .touchUpInside)
+
+    frontBottomRow.axis = .vertical
+    frontBottomRow.spacing = 12
+    frontBottomRow.translatesAutoresizingMaskIntoConstraints = false
+    frontBottomRow.addArrangedSubview(frontTypeAnswerButton)
+    frontBottomRow.addArrangedSubview(frontShowBackButton)
+
+    frontAnswerTextField.placeholder = "Type what you understood…"
+    frontAnswerTextField.borderStyle = .roundedRect
+    frontAnswerTextField.font = .preferredFont(forTextStyle: .body)
+    frontAnswerTextField.returnKeyType = .send
+    frontAnswerTextField.autocorrectionType = .no
+    frontAnswerTextField.translatesAutoresizingMaskIntoConstraints = false
+    frontAnswerTextField.delegate = self
+
+    Self.styleAction(frontSendButton, title: "Send", hotkey: "", backgroundColor: .systemGreen)
+    frontSendButton.addTarget(self, action: #selector(handleSendAnswer), for: .touchUpInside)
+
+    Self.styleAction(frontCancelButton, title: "Cancel", hotkey: "", backgroundColor: .systemGray)
+    frontCancelButton.addTarget(self, action: #selector(handleCancelAnswer), for: .touchUpInside)
+
+    frontAnswerRow.axis = .horizontal
+    frontAnswerRow.spacing = 12
+    frontAnswerRow.alignment = .center
+    frontAnswerRow.translatesAutoresizingMaskIntoConstraints = false
+    frontAnswerRow.addArrangedSubview(frontCancelButton)
+    frontAnswerRow.addArrangedSubview(frontAnswerTextField)
+    frontAnswerRow.addArrangedSubview(frontSendButton)
+    frontAnswerRow.isHidden = true
 
     NSLayoutConstraint.activate([
       frontTranscriptRevealContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 80),
@@ -257,6 +337,8 @@ final class SRSCardReviewView: UIView {
       frontTranscriptLabel.leadingAnchor.constraint(equalTo: frontTranscriptRevealContainer.leadingAnchor, constant: 16),
       frontTranscriptLabel.trailingAnchor.constraint(equalTo: frontTranscriptRevealContainer.trailingAnchor, constant: -16),
       frontTranscriptLabel.bottomAnchor.constraint(equalTo: frontTranscriptRevealContainer.bottomAnchor, constant: -16),
+
+      frontAnswerTextField.heightAnchor.constraint(equalToConstant: 44),
     ])
   }
 
@@ -283,10 +365,62 @@ final class SRSCardReviewView: UIView {
     Self.styleAction(backPlayButton, title: "Play", hotkey: "Space", backgroundColor: .systemBlue)
     backPlayButton.addTarget(self, action: #selector(handlePlayTap), for: .touchUpInside)
 
+    configureLoopButton(backLoopButton)
+
     Self.styleAction(backFailButton, title: "Fail", hotkey: "1", backgroundColor: .systemRed)
     backFailButton.addTarget(self, action: #selector(handleFailTap), for: .touchUpInside)
     Self.styleAction(backPassButton, title: "Pass", hotkey: "2", backgroundColor: .systemGreen)
     backPassButton.addTarget(self, action: #selector(handlePassTap), for: .touchUpInside)
+  }
+
+  private func setUpLLMResult() {
+    llmResultContainer.translatesAutoresizingMaskIntoConstraints = false
+    llmResultContainer.backgroundColor = .tertiarySystemBackground
+    llmResultContainer.layer.cornerRadius = 10
+    llmResultContainer.isHidden = true
+
+    llmUserAnswerLabel.font = .preferredFont(forTextStyle: .body)
+    llmUserAnswerLabel.textColor = .label
+    llmUserAnswerLabel.numberOfLines = 0
+    llmUserAnswerLabel.translatesAutoresizingMaskIntoConstraints = false
+    llmUserAnswerLabel.isHidden = true
+
+    llmLoadingIndicator.hidesWhenStopped = true
+    llmLoadingIndicator.translatesAutoresizingMaskIntoConstraints = false
+
+    llmLoadingLabel.text = "Grading…"
+    llmLoadingLabel.font = .preferredFont(forTextStyle: .subheadline)
+    llmLoadingLabel.textColor = .secondaryLabel
+    llmLoadingLabel.translatesAutoresizingMaskIntoConstraints = false
+
+    llmScoreLabel.font = .monospacedDigitSystemFont(ofSize: 20, weight: .bold)
+    llmScoreLabel.translatesAutoresizingMaskIntoConstraints = false
+    llmScoreLabel.isHidden = true
+
+    llmReasoningLabel.font = .preferredFont(forTextStyle: .body)
+    llmReasoningLabel.textColor = .secondaryLabel
+    llmReasoningLabel.numberOfLines = 0
+    llmReasoningLabel.translatesAutoresizingMaskIntoConstraints = false
+    llmReasoningLabel.isHidden = true
+
+    let loadingRow = UIStackView(arrangedSubviews: [llmLoadingIndicator, llmLoadingLabel])
+    loadingRow.axis = .horizontal
+    loadingRow.spacing = 8
+    loadingRow.alignment = .center
+    loadingRow.translatesAutoresizingMaskIntoConstraints = false
+
+    let stack = UIStackView(arrangedSubviews: [llmUserAnswerLabel, loadingRow, llmScoreLabel, llmReasoningLabel])
+    stack.axis = .vertical
+    stack.spacing = 8
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    llmResultContainer.addSubview(stack)
+
+    NSLayoutConstraint.activate([
+      stack.topAnchor.constraint(equalTo: llmResultContainer.topAnchor, constant: 12),
+      stack.leadingAnchor.constraint(equalTo: llmResultContainer.leadingAnchor, constant: 16),
+      stack.trailingAnchor.constraint(equalTo: llmResultContainer.trailingAnchor, constant: -16),
+      stack.bottomAnchor.constraint(equalTo: llmResultContainer.bottomAnchor, constant: -12),
+    ])
   }
 
   private func setUpEmptyLabel() {
@@ -305,8 +439,8 @@ final class SRSCardReviewView: UIView {
     addSubview(frontContainer)
     addSubview(backContainer)
 
-    // Front: [Toggle | Play] row, speed row, optional transcript, Reveal Back full-width at bottom
-    let frontTopRow = UIStackView(arrangedSubviews: [frontToggleButton, frontPlayButton])
+    // Front: [Toggle | Play | Loop] row, speed row, optional transcript, [Show Back | Type Answer] at bottom
+    let frontTopRow = UIStackView(arrangedSubviews: [frontToggleButton, frontPlayButton, frontLoopButton])
     frontTopRow.axis = .horizontal
     frontTopRow.spacing = 16
     frontTopRow.translatesAutoresizingMaskIntoConstraints = false
@@ -314,21 +448,28 @@ final class SRSCardReviewView: UIView {
     frontContainer.addSubview(frontTopRow)
     frontContainer.addSubview(frontSpeedRow)
     frontContainer.addSubview(frontTranscriptRevealContainer)
-    frontContainer.addSubview(frontRevealBackButton)
+    frontContainer.addSubview(frontBottomRow)
+    frontContainer.addSubview(frontAnswerRow)
 
-    // Back: Play under video, speed row, streak, transcript + translation, Fail|Pass 50/50 at bottom
+    // Back: [Play | Loop] row, speed row, streak, transcript + translation, LLM result, Fail|Pass at bottom
+    let backTopRow = UIStackView(arrangedSubviews: [backPlayButton, backLoopButton])
+    backTopRow.axis = .horizontal
+    backTopRow.spacing = 16
+    backTopRow.translatesAutoresizingMaskIntoConstraints = false
+
     let backGradeRow = UIStackView(arrangedSubviews: [backFailButton, backPassButton])
     backGradeRow.axis = .horizontal
     backGradeRow.spacing = 16
     backGradeRow.distribution = .fillEqually
     backGradeRow.translatesAutoresizingMaskIntoConstraints = false
 
-    backContainer.addSubview(backPlayButton)
+    backContainer.addSubview(backTopRow)
     backContainer.addSubview(backSpeedRow)
     backContainer.addSubview(backStreakLabel)
     backContainer.addSubview(backTranscriptView)
     backContainer.addSubview(backInflectionAnnotationsLabel)
     backContainer.addSubview(backTranslationLabel)
+    backContainer.addSubview(llmResultContainer)
     backContainer.addSubview(backGradeRow)
 
     NSLayoutConstraint.activate([
@@ -360,9 +501,13 @@ final class SRSCardReviewView: UIView {
       frontTranscriptRevealContainer.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
       frontTranscriptRevealContainer.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
 
-      frontRevealBackButton.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
-      frontRevealBackButton.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
-      frontRevealBackButton.bottomAnchor.constraint(equalTo: frontContainer.bottomAnchor),
+      frontBottomRow.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
+      frontBottomRow.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
+      frontBottomRow.bottomAnchor.constraint(equalTo: frontContainer.bottomAnchor),
+
+      frontAnswerRow.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
+      frontAnswerRow.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
+      frontAnswerRow.bottomAnchor.constraint(equalTo: frontContainer.bottomAnchor),
 
       // -- Back --
       backContainer.topAnchor.constraint(equalTo: clipProgressBar.bottomAnchor, constant: 12),
@@ -370,10 +515,10 @@ final class SRSCardReviewView: UIView {
       backContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
       backContainer.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -16),
 
-      backPlayButton.topAnchor.constraint(equalTo: backContainer.topAnchor),
-      backPlayButton.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      backTopRow.topAnchor.constraint(equalTo: backContainer.topAnchor),
+      backTopRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
 
-      backSpeedRow.topAnchor.constraint(equalTo: backPlayButton.bottomAnchor, constant: 12),
+      backSpeedRow.topAnchor.constraint(equalTo: backTopRow.bottomAnchor, constant: 12),
       backSpeedRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
 
       backStreakLabel.topAnchor.constraint(equalTo: backSpeedRow.bottomAnchor, constant: 4),
@@ -390,6 +535,10 @@ final class SRSCardReviewView: UIView {
       backTranslationLabel.topAnchor.constraint(equalTo: backInflectionAnnotationsLabel.bottomAnchor, constant: 12),
       backTranslationLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backTranslationLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      llmResultContainer.topAnchor.constraint(equalTo: backTranslationLabel.bottomAnchor, constant: 12),
+      llmResultContainer.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      llmResultContainer.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
       backGradeRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backGradeRow.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
@@ -463,6 +612,7 @@ final class SRSCardReviewView: UIView {
     isVideoPlaying = false
     playerView.isHidden = true
     updateSpeedLabels()
+    updateLoopButtons()
     backStreakLabel.text = "Consecutive correct at this speed: \(viewModel.consecutiveCorrectAtCurrentSpeed)"
     updateGradeButtonTitles(
       failInterval: viewModel.failIntervalSeconds,
@@ -471,6 +621,16 @@ final class SRSCardReviewView: UIView {
     currentThumbnailFileURL = viewModel.thumbnailFileURL
     currentVideoFileURL = viewModel.videoFileURL
     thumbnailImageView.image = nil
+
+    // Reset front answer state
+    frontBottomRow.isHidden = false
+    frontAnswerRow.isHidden = true
+    frontAnswerTextField.text = ""
+    frontAnswerTextField.resignFirstResponder()
+
+    // Reset LLM result state
+    hideLLMResult()
+    resetGradeButtonHighlights()
 
     frontTranscriptRevealContainer.isHidden = !MSRSAppSettings.showFrontTranscript
     applyVideoStageVisibility()
@@ -487,6 +647,7 @@ final class SRSCardReviewView: UIView {
   }
 
   func revealBack() {
+    frontAnswerTextField.resignFirstResponder()
     isShowingBack = true
     frontContainer.isHidden = true
     backContainer.isHidden = false
@@ -494,7 +655,7 @@ final class SRSCardReviewView: UIView {
   }
 
   func replay() {
-    playFromStart()
+    togglePlayPause()
   }
 
   func showEmptyState(message: String) {
@@ -504,6 +665,42 @@ final class SRSCardReviewView: UIView {
     frontContainer.isHidden = true
     backContainer.isHidden = true
     stopPlayback()
+  }
+
+  func showLLMGradingStarted(userAnswer: String) {
+    llmResultContainer.isHidden = false
+    llmUserAnswerLabel.text = "Your answer: \(userAnswer)"
+    llmUserAnswerLabel.isHidden = false
+    llmLoadingIndicator.startAnimating()
+    llmLoadingLabel.isHidden = false
+    llmScoreLabel.isHidden = true
+    llmReasoningLabel.isHidden = true
+  }
+
+  func showLLMGradeResult(_ result: SRSCardReviewModels.LLMGradeResult) {
+    llmLoadingIndicator.stopAnimating()
+    llmLoadingLabel.isHidden = true
+
+    llmScoreLabel.text = "Score: \(result.score)/100"
+    llmScoreLabel.textColor = result.score >= 70 ? .systemGreen : .systemRed
+    llmScoreLabel.isHidden = false
+
+    llmReasoningLabel.text = result.reasoning
+    llmReasoningLabel.isHidden = false
+
+    highlightRecommendedGrade(result.recommendedGrade)
+  }
+
+  func showLLMGradingError(_ message: String) {
+    llmLoadingIndicator.stopAnimating()
+    llmLoadingLabel.isHidden = true
+
+    llmScoreLabel.text = "Grading failed"
+    llmScoreLabel.textColor = .systemRed
+    llmScoreLabel.isHidden = false
+
+    llmReasoningLabel.text = message
+    llmReasoningLabel.isHidden = false
   }
 
   override func layoutSubviews() {
@@ -569,7 +766,47 @@ final class SRSCardReviewView: UIView {
     blurOverlayView.frame = CGRect(x: x, y: y, width: renderedWidth, height: renderedHeight)
   }
 
+  private func hideLLMResult() {
+    llmResultContainer.isHidden = true
+    llmUserAnswerLabel.isHidden = true
+    llmLoadingIndicator.stopAnimating()
+    llmLoadingLabel.isHidden = true
+    llmScoreLabel.isHidden = true
+    llmReasoningLabel.isHidden = true
+  }
+
+  private func resetGradeButtonHighlights() {
+    backFailButton.layer.borderWidth = 0
+    backPassButton.layer.borderWidth = 0
+  }
+
+  private func highlightRecommendedGrade(_ grade: SRSCardReviewModels.Grade) {
+    resetGradeButtonHighlights()
+    let button = grade == .pass ? backPassButton : backFailButton
+    button.layer.borderColor = UIColor.label.cgColor
+    button.layer.borderWidth = 3
+    button.layer.cornerRadius = 10
+  }
+
   // MARK: - Playback
+
+  private func togglePlayPause() {
+    guard let player else { return }
+    if isVideoPlaying {
+      stopPlayback()
+      applyVideoStageVisibility()
+    } else {
+      let currentSeconds = CMTimeGetSeconds(player.currentTime())
+      if currentSeconds >= currentClipEndTime || currentSeconds < currentClipStartTime {
+        playFromStart()
+      } else {
+        isVideoPlaying = true
+        applyVideoStageVisibility()
+        player.rate = Float(playbackSpeed)
+        installEndObserver()
+      }
+    }
+  }
 
   private func playFromStart() {
     guard let player else { return }
@@ -590,6 +827,8 @@ final class SRSCardReviewView: UIView {
     isVideoPlaying = false
     player?.pause()
     removeEndObserver()
+    autoLoopWorkItem?.cancel()
+    autoLoopWorkItem = nil
   }
 
   private func installEndObserver() {
@@ -606,10 +845,21 @@ final class SRSCardReviewView: UIView {
         let endCMTime = CMTime(seconds: self.currentClipEndTime, preferredTimescale: 600)
         if CMTimeCompare(player.currentTime(), endCMTime) >= 0 {
           self.clipProgressBar.setProgress(1)
-          player.pause()
-          self.isVideoPlaying = false
-          self.removeEndObserver()
-          self.applyVideoStageVisibility()
+          if MSRSAppSettings.autoLoopVideo {
+            player.pause()
+            self.isVideoPlaying = false
+            self.removeEndObserver()
+            let workItem = DispatchWorkItem { [weak self] in
+              self?.playFromStart()
+            }
+            self.autoLoopWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+          } else {
+            player.pause()
+            self.isVideoPlaying = false
+            self.removeEndObserver()
+            self.applyVideoStageVisibility()
+          }
         }
       }
     }
@@ -671,7 +921,7 @@ final class SRSCardReviewView: UIView {
   }
 
   @objc private func handlePlayTap() {
-    onReplayTapped?()
+    togglePlayPause()
   }
 
   @objc private func handleFrontTranscriptRevealTap() {
@@ -681,6 +931,26 @@ final class SRSCardReviewView: UIView {
 
   @objc private func handleFrontRevealBackTap() {
     onRevealBackTapped?()
+  }
+
+  @objc private func handleTypeAnswerTap() {
+    frontBottomRow.isHidden = true
+    frontAnswerRow.isHidden = false
+    frontAnswerTextField.becomeFirstResponder()
+  }
+
+  @objc private func handleCancelAnswer() {
+    frontAnswerTextField.resignFirstResponder()
+    frontAnswerTextField.text = ""
+    frontAnswerRow.isHidden = true
+    frontBottomRow.isHidden = false
+  }
+
+  @objc private func handleSendAnswer() {
+    let answer = frontAnswerTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !answer.isEmpty else { return }
+    frontAnswerTextField.resignFirstResponder()
+    onSubmitTypedAnswer?(answer)
   }
 
   @objc private func handleFailTap() {
@@ -732,7 +1002,9 @@ final class SRSCardReviewView: UIView {
   ) {
     var config = UIButton.Configuration.filled()
     config.title = title
-    config.subtitle = "(\(hotkey))"
+    if !hotkey.isEmpty {
+      config.subtitle = "(\(hotkey))"
+    }
     config.baseBackgroundColor = backgroundColor
     config.baseForegroundColor = .white
     config.cornerStyle = .medium
@@ -740,6 +1012,15 @@ final class SRSCardReviewView: UIView {
     config.titleAlignment = .center
     button.configuration = config
     button.translatesAutoresizingMaskIntoConstraints = false
+  }
+}
+
+// MARK: - UITextFieldDelegate
+
+extension SRSCardReviewView: UITextFieldDelegate {
+  func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+    handleSendAnswer()
+    return false
   }
 }
 
