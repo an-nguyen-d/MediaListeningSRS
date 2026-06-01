@@ -4,11 +4,13 @@ public struct HighlightableTranscriptLabeledRange: Equatable, Sendable {
   public let range: NSRange
   public let termID: Int64
   public let isFullyKnown: Bool
+  public let inflectionKey: String
 
-  public init(range: NSRange, termID: Int64, isFullyKnown: Bool = false) {
+  public init(range: NSRange, termID: Int64, isFullyKnown: Bool = false, inflectionKey: String = "") {
     self.range = range
     self.termID = termID
     self.isFullyKnown = isFullyKnown
+    self.inflectionKey = inflectionKey
   }
 }
 
@@ -231,5 +233,31 @@ public final class HighlightableTranscriptView: UITextView {
     ) as? NSNumber {
       onTermTapped?(value.int64Value)
     }
+  }
+}
+
+extension HighlightableTranscriptLabeledRange {
+
+  public static func buildInflectionAnnotationsText(
+    transcriptText: String,
+    labeledRanges: [HighlightableTranscriptLabeledRange]
+  ) -> String? {
+    var annotations: [String] = []
+    let nsText = transcriptText as NSString
+    var seen = Set<Int64>()
+    for labeled in labeledRanges {
+      guard !labeled.inflectionKey.isEmpty else { continue }
+      guard !seen.contains(labeled.termID) else { continue }
+      seen.insert(labeled.termID)
+      let safeRange = NSRange(
+        location: max(0, labeled.range.location),
+        length: min(labeled.range.length, nsText.length - max(0, labeled.range.location))
+      )
+      guard safeRange.length > 0 else { continue }
+      let surfaceText = nsText.substring(with: safeRange)
+      let readableKey = labeled.inflectionKey.replacingOccurrences(of: ".", with: " → ")
+      annotations.append("\(surfaceText) [\(readableKey)]")
+    }
+    return annotations.isEmpty ? nil : annotations.joined(separator: "  ·  ")
   }
 }

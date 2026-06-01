@@ -46,4 +46,6 @@ public enum ClipExportError: Error, Equatable, Sendable {
   case invalidTimeRange
   case exportSessionCreationFailed
   case exportFailed(message: String)
+  case ffmpegNotFound
+  case ffmpegFailed(message: String)
 }

@@ -3,6 +3,7 @@ import ElixirShared
 import JML_JMLDatabaseClient
 import METG_METGDatabaseClient
 import IYO_DictionaryClient
+import IYO_JapaneseParserClient
 import MSRS_CandidateDetailScene
 import MSRS_ClipExportService
 import MSRS_MediaListeningSRSDatabaseClient

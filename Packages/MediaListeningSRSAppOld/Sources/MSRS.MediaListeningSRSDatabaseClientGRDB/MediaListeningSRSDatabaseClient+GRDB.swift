@@ -247,6 +247,74 @@ extension MediaListeningSRSDatabaseClient {
       )
     }
 
+    migrator.registerMigration("7") { db in
+
+      // Recreate srsCardJapaneseTermLinkRecord with inflectionKey column
+      // and updated unique constraint: (cardID, japaneseTermID, inflectionKey)
+      try db.execute(sql: """
+        CREATE TABLE srsCardJapaneseTermLinkRecord_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          cardID INTEGER NOT NULL REFERENCES srsCardRecord(id) ON DELETE CASCADE,
+          japaneseTermID INTEGER NOT NULL,
+          inflectionKey TEXT NOT NULL DEFAULT '',
+          UNIQUE(cardID, japaneseTermID, inflectionKey)
+        )
+      """)
+      try db.execute(sql: """
+        INSERT INTO srsCardJapaneseTermLinkRecord_new (id, cardID, japaneseTermID, inflectionKey)
+        SELECT id, cardID, japaneseTermID, '' FROM srsCardJapaneseTermLinkRecord
+      """)
+      try db.execute(sql: "DROP TABLE srsCardJapaneseTermLinkRecord")
+      try db.execute(sql: "ALTER TABLE srsCardJapaneseTermLinkRecord_new RENAME TO srsCardJapaneseTermLinkRecord")
+      try db.create(index: "idx_scjtl_termID",
+                    on: "srsCardJapaneseTermLinkRecord",
+                    columns: ["japaneseTermID"])
+
+      // Recreate mediaSourceCardCandidateJapaneseTermLinkRecord with inflectionKey
+      // and updated unique constraint: (candidateID, japaneseTermID, inflectionKey)
+      try db.execute(sql: """
+        CREATE TABLE mediaSourceCardCandidateJapaneseTermLinkRecord_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          candidateID INTEGER NOT NULL REFERENCES mediaSourceCardCandidateRecord(id) ON DELETE CASCADE,
+          japaneseTermID INTEGER NOT NULL,
+          inflectionKey TEXT NOT NULL DEFAULT '',
+          UNIQUE(candidateID, japaneseTermID, inflectionKey)
+        )
+      """)
+      try db.execute(sql: """
+        INSERT INTO mediaSourceCardCandidateJapaneseTermLinkRecord_new (id, candidateID, japaneseTermID, inflectionKey)
+        SELECT id, candidateID, japaneseTermID, '' FROM mediaSourceCardCandidateJapaneseTermLinkRecord
+      """)
+      try db.execute(sql: "DROP TABLE mediaSourceCardCandidateJapaneseTermLinkRecord")
+      try db.execute(sql: "ALTER TABLE mediaSourceCardCandidateJapaneseTermLinkRecord_new RENAME TO mediaSourceCardCandidateJapaneseTermLinkRecord")
+      try db.create(index: "idx_msccjtl_termID",
+                    on: "mediaSourceCardCandidateJapaneseTermLinkRecord",
+                    columns: ["japaneseTermID"])
+
+      // Recreate japaneseTermCardCoverageRecord with inflectionKey
+      // and updated unique constraint: (japaneseTermID, inflectionKey)
+      try db.execute(sql: """
+        CREATE TABLE japaneseTermCardCoverageRecord_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          japaneseTermID INTEGER NOT NULL,
+          inflectionKey TEXT NOT NULL DEFAULT '',
+          cardCoverageCount INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(japaneseTermID, inflectionKey)
+        )
+      """)
+      try db.execute(sql: """
+        INSERT INTO japaneseTermCardCoverageRecord_new (japaneseTermID, inflectionKey, cardCoverageCount)
+        SELECT japaneseTermID, '', COUNT(DISTINCT cardID)
+        FROM srsCardJapaneseTermLinkRecord
+        GROUP BY japaneseTermID
+      """)
+      try db.execute(sql: "DROP TABLE japaneseTermCardCoverageRecord")
+      try db.execute(sql: "ALTER TABLE japaneseTermCardCoverageRecord_new RENAME TO japaneseTermCardCoverageRecord")
+      try db.create(index: "idx_jtccr_termID",
+                    on: "japaneseTermCardCoverageRecord",
+                    columns: ["japaneseTermID"])
+    }
+
     return migrator
   }
 }

@@ -37,6 +37,7 @@ final class CandidateDetailView: UIView {
 
   private let rangeLabel = UILabel()
   private let transcriptView = HighlightableTranscriptView()
+  private let inflectionAnnotationsLabel = UILabel()
   private let translationLabel = UILabel()
 
   private let endIndexLabel = UILabel()
@@ -146,6 +147,11 @@ final class CandidateDetailView: UIView {
       self?.onTermTapped?(termID)
     }
 
+    inflectionAnnotationsLabel.font = .preferredFont(forTextStyle: .caption1)
+    inflectionAnnotationsLabel.textColor = .tertiaryLabel
+    inflectionAnnotationsLabel.numberOfLines = 0
+    inflectionAnnotationsLabel.isHidden = true
+
     translationLabel.font = .preferredFont(forTextStyle: .title3)
     translationLabel.textColor = .secondaryLabel
     translationLabel.numberOfLines = 0
@@ -201,6 +207,7 @@ final class CandidateDetailView: UIView {
     stack.addArrangedSubview(speedRow)
     stack.addArrangedSubview(rangeLabel)
     stack.addArrangedSubview(transcriptView)
+    stack.addArrangedSubview(inflectionAnnotationsLabel)
     stack.addArrangedSubview(translationLabel)
     stack.addArrangedSubview(endIndexRow)
     stack.addArrangedSubview(startTimeRow)
@@ -289,6 +296,12 @@ final class CandidateDetailView: UIView {
       text: viewModel.subtitleText.isEmpty ? "(no subtitle text)" : viewModel.subtitleText,
       labeledRanges: viewModel.labeledRanges
     )
+    if let annotations = viewModel.inflectionAnnotationsText {
+      inflectionAnnotationsLabel.text = annotations
+      inflectionAnnotationsLabel.isHidden = false
+    } else {
+      inflectionAnnotationsLabel.isHidden = true
+    }
     translationLabel.text = viewModel.englishTranslationText ?? "(no translation)"
 
     endIndexLabel.text = "End index: \(viewModel.subtitleIndexEnd)"

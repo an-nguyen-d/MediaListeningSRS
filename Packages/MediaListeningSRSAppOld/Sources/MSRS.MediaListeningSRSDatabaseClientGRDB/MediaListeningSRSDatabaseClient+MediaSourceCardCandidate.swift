@@ -30,11 +30,13 @@ extension MediaListeningSRSDatabaseClient {
             createdRecords.append(record)
 
             guard let candidateID = record.id else { continue }
-            for termID in input.japaneseTermIDs {
+            let uniqueLinks = Set(input.termLinks)
+            for termLink in uniqueLinks {
               var link = MediaSourceCardCandidateJapaneseTermLinkRecord(
                 id: nil,
                 candidateID: candidateID,
-                japaneseTermID: termID
+                japaneseTermID: termLink.japaneseTermID,
+                inflectionKey: termLink.inflectionKey
               )
               try link.insert(db)
             }

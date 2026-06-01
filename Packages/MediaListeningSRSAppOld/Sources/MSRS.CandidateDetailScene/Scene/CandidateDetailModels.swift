@@ -2,6 +2,7 @@ import Foundation
 import ElixirShared
 import IYO_DictionaryClient
 import IYO_DictionaryUIKit
+import IYO_JapaneseParserClient
 import MSRS_ClipExportService
 import MSRS_MediaListeningSRSDatabaseClient
 import MSRS_Shared
@@ -14,6 +15,7 @@ public enum CandidateDetailModels {
   public typealias Dependencies = HasClipExportService
                                 & HasDictionaryClient
                                 & HasExportedClipsDirectoryURL
+                                & HasJapaneseParserClient
                                 & HasJMLDatabaseClient
                                 & HasMediaListeningSRSDatabaseClient
                                 & HasMETGDatabaseClient
@@ -35,6 +37,7 @@ public enum CandidateDetailModels {
     public let subtitleIndexEnd: Int
     public let subtitleText: String
     public let labeledRanges: [HighlightableTranscriptLabeledRange]
+    public let inflectionAnnotationsText: String?
     public let englishTranslationText: String?
     public let defaultStartTime: TimeInterval
     public let defaultEndTime: TimeInterval
@@ -47,6 +50,7 @@ public enum CandidateDetailModels {
       subtitleIndexEnd: Int,
       subtitleText: String,
       labeledRanges: [HighlightableTranscriptLabeledRange],
+      inflectionAnnotationsText: String?,
       englishTranslationText: String?,
       defaultStartTime: TimeInterval,
       defaultEndTime: TimeInterval,
@@ -58,6 +62,7 @@ public enum CandidateDetailModels {
       self.subtitleIndexEnd = subtitleIndexEnd
       self.subtitleText = subtitleText
       self.labeledRanges = labeledRanges
+      self.inflectionAnnotationsText = inflectionAnnotationsText
       self.englishTranslationText = englishTranslationText
       self.defaultStartTime = defaultStartTime
       self.defaultEndTime = defaultEndTime

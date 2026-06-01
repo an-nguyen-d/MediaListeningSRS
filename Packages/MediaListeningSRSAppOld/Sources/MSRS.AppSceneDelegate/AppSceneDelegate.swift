@@ -1,5 +1,6 @@
 import UIKit
 import MSRS_AppDependencies
+import MSRS_MediaSourceImportService
 import MSRS_MediaSourcesListScene
 import MSRS_StudyStatsScene
 import MSRS_WordsListScene
@@ -42,6 +43,7 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
     self.window = window
 
     createDailySnapshotIfNeeded()
+    backfillInflectionKeysIfNeeded()
   }
 
   open func sceneDidBecomeActive(_ scene: UIScene) {
@@ -52,6 +54,18 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
     Task {
       try? await dependencies.mediaListeningSRSDatabaseClient.dailySnapshot.createIfNeeded(
         .init(date: Date())
+      )
+    }
+  }
+
+  private func backfillInflectionKeysIfNeeded() {
+    Task {
+      await InflectionKeyBackfillService.backfillIfNeeded(
+        mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
+        jmlDatabaseClient: dependencies.jmlDatabaseClient,
+        metgDatabaseClient: dependencies.metgDatabaseClient,
+        srtParserClient: dependencies.srtParserClient,
+        japaneseParserClient: dependencies.japaneseParserClient
       )
     }
   }

@@ -41,6 +41,7 @@ public enum SRSCardReviewModels {
     public let clipEndTimeSeconds: TimeInterval
     public let transcriptText: String
     public let transcriptLabeledRanges: [HighlightableTranscriptLabeledRange]
+    public let inflectionAnnotationsText: String?
     public let englishTranslationText: String?
     public let cardPositionLabel: String
     public let frontVideoVisibility: SRSCardModel.FrontVideoVisibility
@@ -57,6 +58,7 @@ public enum SRSCardReviewModels {
       clipEndTimeSeconds: TimeInterval,
       transcriptText: String,
       transcriptLabeledRanges: [HighlightableTranscriptLabeledRange],
+      inflectionAnnotationsText: String?,
       englishTranslationText: String?,
       cardPositionLabel: String,
       frontVideoVisibility: SRSCardModel.FrontVideoVisibility,
@@ -72,6 +74,7 @@ public enum SRSCardReviewModels {
       self.clipEndTimeSeconds = clipEndTimeSeconds
       self.transcriptText = transcriptText
       self.transcriptLabeledRanges = transcriptLabeledRanges
+      self.inflectionAnnotationsText = inflectionAnnotationsText
       self.englishTranslationText = englishTranslationText
       self.cardPositionLabel = cardPositionLabel
       self.frontVideoVisibility = frontVideoVisibility

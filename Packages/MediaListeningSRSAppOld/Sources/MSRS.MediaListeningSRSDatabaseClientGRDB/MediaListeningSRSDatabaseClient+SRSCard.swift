@@ -1,6 +1,7 @@
 import Foundation
 import GRDB
 import MSRS_FSRS
+import MSRS_Shared
 import MSRS_SharedModels
 import MSRS_MediaListeningSRSDatabaseClient
 
@@ -30,18 +31,17 @@ extension MediaListeningSRSDatabaseClient {
             return .init(model: GRDBMapper.SRSCard.mapToModel(from: record))
           }
 
-          let uniqueTermIDs = Set(request.japaneseTermIDs)
-          for termID in uniqueTermIDs {
-            var link = SRSCardJapaneseTermLinkRecord(
+          let uniqueLinks = Set(request.japaneseTermLinks)
+          for link in uniqueLinks {
+            var record = SRSCardJapaneseTermLinkRecord(
               id: nil,
               cardID: cardID,
-              japaneseTermID: termID
+              japaneseTermID: link.japaneseTermID,
+              inflectionKey: link.inflectionKey
             )
-            try link.insert(db)
+            try record.insert(db)
           }
 
-          // Hide every candidate whose subtitle index falls within this card's range so
-          // the processing queue moves to the next un-processed candidate.
           try db.execute(sql: """
             UPDATE mediaSourceCardCandidateRecord
             SET wasUsedInCard = 1, lastUpdatedAt = ?
@@ -54,17 +54,17 @@ extension MediaListeningSRSDatabaseClient {
             request.subtitleIndexEnd
           ])
 
-          for termID in uniqueTermIDs {
+          for link in uniqueLinks {
             try db.execute(sql: """
-              INSERT INTO japaneseTermCardCoverageRecord (japaneseTermID, cardCoverageCount)
-              VALUES (?, 1)
-              ON CONFLICT(japaneseTermID) DO UPDATE SET cardCoverageCount = cardCoverageCount + 1
-            """, arguments: [termID])
+              INSERT INTO japaneseTermCardCoverageRecord (japaneseTermID, inflectionKey, cardCoverageCount)
+              VALUES (?, ?, 1)
+              ON CONFLICT(japaneseTermID, inflectionKey) DO UPDATE SET cardCoverageCount = cardCoverageCount + 1
+            """, arguments: [link.japaneseTermID, link.inflectionKey])
           }
 
           let coverageThreshold = CandidateValidityFilterService.readCoverageThreshold()
           try CandidateValidityFilterService.cascadeAutoFilter(
-            changedTermIDs: uniqueTermIDs,
+            changedPairs: uniqueLinks,
             coverageThreshold: coverageThreshold,
             db: db
           )
@@ -74,22 +74,26 @@ extension MediaListeningSRSDatabaseClient {
       },
       delete: { request in
         try await databaseWriter.write { db in
-          let termRows = try Row.fetchAll(db, sql: """
-            SELECT japaneseTermID FROM srsCardJapaneseTermLinkRecord WHERE cardID = ?
+          let linkRows = try Row.fetchAll(db, sql: """
+            SELECT japaneseTermID, inflectionKey FROM srsCardJapaneseTermLinkRecord WHERE cardID = ?
           """, arguments: [request.id.rawValue])
-          let termIDs = termRows.compactMap { $0["japaneseTermID"] as Int64? }
+          let links = linkRows.compactMap { row -> TermInflectionPair? in
+            guard let termID: Int64 = row["japaneseTermID"],
+                  let key: String = row["inflectionKey"] else { return nil }
+            return TermInflectionPair(japaneseTermID: termID, inflectionKey: key)
+          }
 
           let didDelete = try SRSCardRecord.deleteOne(db, key: request.id.rawValue)
           guard didDelete else {
             throw MediaListeningSRSDatabaseError.recordNotFound(id: request.id.rawValue)
           }
 
-          for termID in termIDs {
+          for link in links {
             try db.execute(sql: """
               UPDATE japaneseTermCardCoverageRecord
               SET cardCoverageCount = MAX(0, cardCoverageCount - 1)
-              WHERE japaneseTermID = ?
-            """, arguments: [termID])
+              WHERE japaneseTermID = ? AND inflectionKey = ?
+            """, arguments: [link.japaneseTermID, link.inflectionKey])
           }
 
           return .init()
@@ -289,6 +293,21 @@ extension MediaListeningSRSDatabaseClient {
             failIntervalSeconds: max(0, failDue.timeIntervalSince(now)),
             passIntervalSeconds: max(0, passDue.timeIntervalSince(now))
           )
+        }
+      },
+      fetchTermLinksForCard: { request in
+        try await databaseWriter.read { db in
+          let rows = try Row.fetchAll(db, sql: """
+            SELECT japaneseTermID, inflectionKey
+            FROM srsCardJapaneseTermLinkRecord
+            WHERE cardID = ?
+          """, arguments: [request.cardID.rawValue])
+          let links = rows.compactMap { row -> TermInflectionPair? in
+            guard let termID: Int64 = row["japaneseTermID"],
+                  let key: String = row["inflectionKey"] else { return nil }
+            return TermInflectionPair(japaneseTermID: termID, inflectionKey: key)
+          }
+          return .init(termLinks: links)
         }
       }
     )

@@ -11,6 +11,7 @@ import JML_JMLDatabaseClientGRDB
 import METG_METGDatabaseClient
 import METG_METGDatabaseClientGRDB
 import IYO_DictionaryClient
+import IYO_JapaneseParserClient
 import NYAN_SharedAnimeClipDatabase
 
 public struct AppDependencies:
@@ -20,6 +21,7 @@ public struct AppDependencies:
   HasJMLDatabaseClient,
   HasMediaListeningSRSDatabaseClient,
   HasMediaSourceImportService,
+  HasJapaneseParserClient,
   HasMETGDatabaseClient,
   HasSRTParserClient
 {
@@ -27,6 +29,7 @@ public struct AppDependencies:
   public let mediaListeningSRSDatabaseClient: MediaListeningSRSDatabaseClient
   public let mediaSourceImportService: MediaSourceImportService
   public let clipExportService: ClipExportService
+  public let japaneseParserClient: JapaneseParserClient
   public let srtParserClient: SRTParserClient
 
   public let jmlDatabaseClient: JMLDatabaseClient
@@ -62,10 +65,16 @@ public struct AppDependencies:
 
     self.srtParserClient = .liveValue()
 
+    self.japaneseParserClient = .liveValue(
+      dictionaryClient: self.dictionaryClient
+    )
+
     self.mediaSourceImportService = .liveValue(
       jmlDatabaseClient: self.jmlDatabaseClient,
       metgDatabaseClient: self.metgDatabaseClient,
-      mediaListeningSRSDatabaseClient: self.mediaListeningSRSDatabaseClient
+      mediaListeningSRSDatabaseClient: self.mediaListeningSRSDatabaseClient,
+      srtParserClient: self.srtParserClient,
+      japaneseParserClient: self.japaneseParserClient
     )
 
     self.clipExportService = .avFoundationValue()

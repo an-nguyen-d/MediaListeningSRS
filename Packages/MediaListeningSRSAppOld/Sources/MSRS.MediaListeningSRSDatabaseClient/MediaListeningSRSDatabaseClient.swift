@@ -1,5 +1,6 @@
 import Foundation
 import Tagged
+import MSRS_Shared
 import MSRS_SharedModels
 
 public struct MediaListeningSRSDatabaseClient: Sendable {
@@ -60,10 +61,10 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
     public enum BulkCreate {
       public struct CandidateInput: Sendable, Equatable {
         public let subtitleIndex: Int
-        public let japaneseTermIDs: [Int64]
-        public init(subtitleIndex: Int, japaneseTermIDs: [Int64]) {
+        public let termLinks: [TermInflectionPair]
+        public init(subtitleIndex: Int, termLinks: [TermInflectionPair]) {
           self.subtitleIndex = subtitleIndex
-          self.japaneseTermIDs = japaneseTermIDs
+          self.termLinks = termLinks
         }
       }
       public struct Request: Sendable {
@@ -173,8 +174,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
         public let clipStartTimeSeconds: TimeInterval
         public let clipEndTimeSeconds: TimeInterval
         public let clipRelativeFilePath: String
-        /// All iYomi term IDs the card's subtitle range covers (snapshotted from MWBT at promote time).
-        public let japaneseTermIDs: [Int64]
+        public let japaneseTermLinks: [TermInflectionPair]
 
         public init(
           mediaSourceID: MediaSourceModel.ID,
@@ -183,7 +183,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
           clipStartTimeSeconds: TimeInterval,
           clipEndTimeSeconds: TimeInterval,
           clipRelativeFilePath: String,
-          japaneseTermIDs: [Int64]
+          japaneseTermLinks: [TermInflectionPair]
         ) {
           self.mediaSourceID = mediaSourceID
           self.subtitleIndexStart = subtitleIndexStart
@@ -191,7 +191,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
           self.clipStartTimeSeconds = clipStartTimeSeconds
           self.clipEndTimeSeconds = clipEndTimeSeconds
           self.clipRelativeFilePath = clipRelativeFilePath
-          self.japaneseTermIDs = japaneseTermIDs
+          self.japaneseTermLinks = japaneseTermLinks
         }
       }
       public struct Response: Sendable, Equatable {
@@ -312,6 +312,19 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
 
     public var previewNextIntervals: @Sendable (PreviewNextIntervals.Request) async throws -> PreviewNextIntervals.Response
 
+    public enum FetchTermLinksForCard {
+      public struct Request: Sendable {
+        public let cardID: SRSCardModel.ID
+        public init(cardID: SRSCardModel.ID) { self.cardID = cardID }
+      }
+      public struct Response: Sendable, Equatable {
+        public let termLinks: [TermInflectionPair]
+        public init(termLinks: [TermInflectionPair]) { self.termLinks = termLinks }
+      }
+    }
+
+    public var fetchTermLinksForCard: @Sendable (FetchTermLinksForCard.Request) async throws -> FetchTermLinksForCard.Response
+
     public init(
       create: @Sendable @escaping (Create.Request) async throws -> Create.Response,
       delete: @Sendable @escaping (Delete.Request) async throws -> Delete.Response,
@@ -321,7 +334,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       fetchDueCards: @Sendable @escaping (FetchDueCards.Request) async throws -> FetchDueCards.Response,
       updateFrontVideoVisibility: @Sendable @escaping (UpdateFrontVideoVisibility.Request) async throws -> UpdateFrontVideoVisibility.Response,
       updatePlaybackSpeed: @Sendable @escaping (UpdatePlaybackSpeed.Request) async throws -> UpdatePlaybackSpeed.Response,
-      previewNextIntervals: @Sendable @escaping (PreviewNextIntervals.Request) async throws -> PreviewNextIntervals.Response
+      previewNextIntervals: @Sendable @escaping (PreviewNextIntervals.Request) async throws -> PreviewNextIntervals.Response,
+      fetchTermLinksForCard: @Sendable @escaping (FetchTermLinksForCard.Request) async throws -> FetchTermLinksForCard.Response
     ) {
       self.create = create
       self.delete = delete
@@ -332,6 +346,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       self.updateFrontVideoVisibility = updateFrontVideoVisibility
       self.updatePlaybackSpeed = updatePlaybackSpeed
       self.previewNextIntervals = previewNextIntervals
+      self.fetchTermLinksForCard = fetchTermLinksForCard
     }
   }
   public var srsCard: SRSCard
@@ -400,20 +415,41 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
     }
 
-    public enum FetchInvalidTermIDs {
+    public enum FetchInvalidTermPairs {
       public struct Request: Sendable {
-        public let japaneseTermIDs: [Int64]
+        public let termPairs: [TermInflectionPair]
         public let coverageThreshold: Int
-        public init(japaneseTermIDs: [Int64], coverageThreshold: Int) {
-          self.japaneseTermIDs = japaneseTermIDs
+        public init(termPairs: [TermInflectionPair], coverageThreshold: Int) {
+          self.termPairs = termPairs
           self.coverageThreshold = coverageThreshold
         }
       }
       public struct Response: Sendable, Equatable {
-        public let invalidTermIDs: Set<Int64>
-        public init(invalidTermIDs: Set<Int64>) {
-          self.invalidTermIDs = invalidTermIDs
+        public let invalidPairs: Set<TermInflectionPair>
+        public init(invalidPairs: Set<TermInflectionPair>) {
+          self.invalidPairs = invalidPairs
         }
+      }
+    }
+
+    public struct SourceInflectionData: Sendable {
+      public let mediaSourceID: MediaSourceModel.ID
+      public let pairsBySubtitleIndex: [Int: [TermInflectionPair]]
+      public init(mediaSourceID: MediaSourceModel.ID, pairsBySubtitleIndex: [Int: [TermInflectionPair]]) {
+        self.mediaSourceID = mediaSourceID
+        self.pairsBySubtitleIndex = pairsBySubtitleIndex
+      }
+    }
+
+    public enum BackfillInflectionKeys {
+      public struct Request: Sendable {
+        public let sourceData: [SourceInflectionData]
+        public init(sourceData: [SourceInflectionData]) {
+          self.sourceData = sourceData
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public init() {}
       }
     }
 
@@ -436,7 +472,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
     public var isFullyKnown: @Sendable (IsFullyKnown.Request) async throws -> IsFullyKnown.Response
     public var fetchFullyKnownTermIDs: @Sendable (FetchFullyKnownTermIDs.Request) async throws -> FetchFullyKnownTermIDs.Response
     public var fetchLearnedScoresForTermIDs: @Sendable (FetchLearnedScoresForTermIDs.Request) async throws -> FetchLearnedScoresForTermIDs.Response
-    public var fetchInvalidTermIDs: @Sendable (FetchInvalidTermIDs.Request) async throws -> FetchInvalidTermIDs.Response
+    public var fetchInvalidTermPairs: @Sendable (FetchInvalidTermPairs.Request) async throws -> FetchInvalidTermPairs.Response
+    public var backfillInflectionKeys: @Sendable (BackfillInflectionKeys.Request) async throws -> BackfillInflectionKeys.Response
     public var fetchCoverageCountsForTermIDs: @Sendable (FetchCoverageCountsForTermIDs.Request) async throws -> FetchCoverageCountsForTermIDs.Response
 
     public init(
@@ -444,14 +481,16 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       isFullyKnown: @Sendable @escaping (IsFullyKnown.Request) async throws -> IsFullyKnown.Response,
       fetchFullyKnownTermIDs: @Sendable @escaping (FetchFullyKnownTermIDs.Request) async throws -> FetchFullyKnownTermIDs.Response,
       fetchLearnedScoresForTermIDs: @Sendable @escaping (FetchLearnedScoresForTermIDs.Request) async throws -> FetchLearnedScoresForTermIDs.Response,
-      fetchInvalidTermIDs: @Sendable @escaping (FetchInvalidTermIDs.Request) async throws -> FetchInvalidTermIDs.Response,
+      fetchInvalidTermPairs: @Sendable @escaping (FetchInvalidTermPairs.Request) async throws -> FetchInvalidTermPairs.Response,
+      backfillInflectionKeys: @Sendable @escaping (BackfillInflectionKeys.Request) async throws -> BackfillInflectionKeys.Response,
       fetchCoverageCountsForTermIDs: @Sendable @escaping (FetchCoverageCountsForTermIDs.Request) async throws -> FetchCoverageCountsForTermIDs.Response
     ) {
       self.markAsFullyKnown = markAsFullyKnown
       self.isFullyKnown = isFullyKnown
       self.fetchFullyKnownTermIDs = fetchFullyKnownTermIDs
       self.fetchLearnedScoresForTermIDs = fetchLearnedScoresForTermIDs
-      self.fetchInvalidTermIDs = fetchInvalidTermIDs
+      self.fetchInvalidTermPairs = fetchInvalidTermPairs
+      self.backfillInflectionKeys = backfillInflectionKeys
       self.fetchCoverageCountsForTermIDs = fetchCoverageCountsForTermIDs
     }
   }

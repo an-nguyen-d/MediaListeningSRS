@@ -211,10 +211,18 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
         let intervals = try? await mediaListeningSRSDatabaseClient.srsCard.previewNextIntervals(
           .init(cardID: card.id)
         )
+        let termLinksResp = try await mediaListeningSRSDatabaseClient.srsCard.fetchTermLinksForCard(
+          .init(cardID: card.id)
+        )
+        var inflectionKeysByTermID: [Int64: String] = [:]
+        for link in termLinksResp.termLinks {
+          inflectionKeysByTermID[link.japaneseTermID] = link.inflectionKey
+        }
         await MainActor.run {
           self.buildAndPresent(
             card: card,
             cache: cache,
+            inflectionKeysByTermID: inflectionKeysByTermID,
             failIntervalSeconds: intervals?.failIntervalSeconds,
             passIntervalSeconds: intervals?.passIntervalSeconds
           )
@@ -230,6 +238,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   private func buildAndPresent(
     card: SRSCardModel,
     cache: SourceCache,
+    inflectionKeysByTermID: [Int64: String] = [:],
     failIntervalSeconds: TimeInterval? = nil,
     passIntervalSeconds: TimeInterval? = nil
   ) {
@@ -251,7 +260,8 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
             length: length
           ),
           termID: termIDValue,
-          isFullyKnown: fullyKnownTermIDs.contains(termIDValue)
+          isFullyKnown: fullyKnownTermIDs.contains(termIDValue),
+          inflectionKey: inflectionKeysByTermID[termIDValue] ?? ""
         ))
       }
       joinedParts.append(text)
@@ -268,6 +278,11 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     let clipFileURL = exportedClipsDirectoryURL.appendingPathComponent(card.clipRelativeFilePath)
     let thumbnailFileURL = clipFileURL.deletingPathExtension().appendingPathExtension("jpg")
 
+    let inflectionAnnotationsText = HighlightableTranscriptLabeledRange.buildInflectionAnnotationsText(
+      transcriptText: transcriptText,
+      labeledRanges: labeledRanges
+    )
+
     presenter.presentCard(.init(
       cardID: card.id,
       videoFileURL: cache.videoFileURL,
@@ -275,6 +290,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       clipEndTimeSeconds: card.clipEndTimeSeconds,
       transcriptText: transcriptText,
       transcriptLabeledRanges: labeledRanges,
+      inflectionAnnotationsText: inflectionAnnotationsText,
       englishTranslationText: translationText,
       cardPositionLabel: "\(currentIndex + 1) of \(cards.count)",
       frontVideoVisibility: card.frontVideoVisibility,
@@ -306,6 +322,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
         labelsBySubtitleIndex[label.subtitleIndex.rawValue, default: []].append(label)
       }
     }
+
     let cache = SourceCache(
       videoFileURL: resolved.videoURL,
       subtitleSegmentsByIndex: segmentsByIndex,

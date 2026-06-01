@@ -31,6 +31,7 @@ public final class CandidateDetailVC: UIViewController, CandidateDetailDisplayer
       jmlDatabaseClient: dependencies.jmlDatabaseClient,
       metgDatabaseClient: dependencies.metgDatabaseClient,
       dictionaryClient: dependencies.dictionaryClient,
+      japaneseParserClient: dependencies.japaneseParserClient,
       srtParserClient: dependencies.srtParserClient,
       clipExportService: dependencies.clipExportService,
       exportedClipsDirectoryURL: dependencies.exportedClipsDirectoryURL

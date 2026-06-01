@@ -45,6 +45,7 @@ final class SRSCardReviewView: UIView {
 
   private let backContainer = UIView()
   private let backTranscriptView = HighlightableTranscriptView()
+  private let backInflectionAnnotationsLabel = UILabel()
   private let backTranslationLabel = UILabel()
   private let backPlayButton = UIButton(type: .system)
   private let backFailButton = UIButton(type: .system)
@@ -67,6 +68,8 @@ final class SRSCardReviewView: UIView {
   private var currentClipEndTime: TimeInterval = 0
   private var endObserver: Any?
   private var thumbnailTask: Task<Void, Never>?
+  private var currentThumbnailFileURL: URL?
+  private var currentVideoFileURL: URL?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -266,6 +269,12 @@ final class SRSCardReviewView: UIView {
     }
     backTranscriptView.translatesAutoresizingMaskIntoConstraints = false
 
+    backInflectionAnnotationsLabel.font = .preferredFont(forTextStyle: .caption1)
+    backInflectionAnnotationsLabel.textColor = .tertiaryLabel
+    backInflectionAnnotationsLabel.numberOfLines = 0
+    backInflectionAnnotationsLabel.isHidden = true
+    backInflectionAnnotationsLabel.translatesAutoresizingMaskIntoConstraints = false
+
     backTranslationLabel.font = .preferredFont(forTextStyle: .title3)
     backTranslationLabel.textColor = .secondaryLabel
     backTranslationLabel.numberOfLines = 0
@@ -318,6 +327,7 @@ final class SRSCardReviewView: UIView {
     backContainer.addSubview(backSpeedRow)
     backContainer.addSubview(backStreakLabel)
     backContainer.addSubview(backTranscriptView)
+    backContainer.addSubview(backInflectionAnnotationsLabel)
     backContainer.addSubview(backTranslationLabel)
     backContainer.addSubview(backGradeRow)
 
@@ -373,7 +383,11 @@ final class SRSCardReviewView: UIView {
       backTranscriptView.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backTranscriptView.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
-      backTranslationLabel.topAnchor.constraint(equalTo: backTranscriptView.bottomAnchor, constant: 12),
+      backInflectionAnnotationsLabel.topAnchor.constraint(equalTo: backTranscriptView.bottomAnchor, constant: 4),
+      backInflectionAnnotationsLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      backInflectionAnnotationsLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      backTranslationLabel.topAnchor.constraint(equalTo: backInflectionAnnotationsLabel.bottomAnchor, constant: 12),
       backTranslationLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backTranslationLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
@@ -405,6 +419,14 @@ final class SRSCardReviewView: UIView {
     guard !isShowingBack else { return }
     stopPlayback()
     frontVideoVisibility = frontVideoVisibility.next
+    if frontVideoVisibility != .blackScreen, thumbnailImageView.image == nil,
+       let thumbURL = currentThumbnailFileURL, let videoURL = currentVideoFileURL {
+      loadOrGenerateThumbnail(
+        thumbnailFileURL: thumbURL,
+        videoFileURL: videoURL,
+        atTime: currentClipStartTime
+      )
+    }
     applyVideoStageVisibility()
     onFrontVideoVisibilityChanged?(frontVideoVisibility)
   }
@@ -418,6 +440,8 @@ final class SRSCardReviewView: UIView {
       text: viewModel.transcriptText,
       labeledRanges: viewModel.transcriptLabeledRanges
     )
+    backInflectionAnnotationsLabel.text = viewModel.inflectionAnnotationsText
+    backInflectionAnnotationsLabel.isHidden = viewModel.inflectionAnnotationsText == nil
     backTranslationLabel.text = viewModel.englishTranslationText ?? "(no translation)"
     frontTranscriptLabel.text = viewModel.transcriptText
 
@@ -444,15 +468,21 @@ final class SRSCardReviewView: UIView {
       failInterval: viewModel.failIntervalSeconds,
       passInterval: viewModel.passIntervalSeconds
     )
+    currentThumbnailFileURL = viewModel.thumbnailFileURL
+    currentVideoFileURL = viewModel.videoFileURL
+    thumbnailImageView.image = nil
+
     frontTranscriptRevealContainer.isHidden = !MSRSAppSettings.showFrontTranscript
     applyVideoStageVisibility()
     updateFrontTranscriptRevealView()
     showFront()
-    loadOrGenerateThumbnail(
-      thumbnailFileURL: viewModel.thumbnailFileURL,
-      videoFileURL: viewModel.videoFileURL,
-      atTime: viewModel.clipStartTimeSeconds
-    )
+    if frontVideoVisibility != .blackScreen {
+      loadOrGenerateThumbnail(
+        thumbnailFileURL: viewModel.thumbnailFileURL,
+        videoFileURL: viewModel.videoFileURL,
+        atTime: viewModel.clipStartTimeSeconds
+      )
+    }
     playFromStart()
   }
 
@@ -613,6 +643,7 @@ final class SRSCardReviewView: UIView {
       let asset = AVURLAsset(url: videoFileURL)
       let generator = AVAssetImageGenerator(asset: asset)
       generator.appliesPreferredTrackTransform = true
+      generator.maximumSize = CGSize(width: 960, height: 540)
       generator.requestedTimeToleranceBefore = .zero
       generator.requestedTimeToleranceAfter = CMTime(seconds: 1, preferredTimescale: 600)
       let cmTime = CMTime(seconds: time, preferredTimescale: 600)
@@ -620,7 +651,7 @@ final class SRSCardReviewView: UIView {
         let (cgImage, _) = try await generator.image(at: cmTime)
         guard !Task.isCancelled else { return }
         let image = UIImage(cgImage: cgImage)
-        if let jpegData = image.jpegData(compressionQuality: 0.85) {
+        if let jpegData = image.jpegData(compressionQuality: 0.6) {
           try? jpegData.write(to: thumbnailFileURL, options: .atomic)
         }
         await MainActor.run {

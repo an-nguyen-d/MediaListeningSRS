@@ -6,6 +6,7 @@ public struct SRSCardJapaneseTermLinkRecord: Codable, FetchableRecord, MutablePe
 
   public var cardID: Int64
   public var japaneseTermID: Int64
+  public var inflectionKey: String
 
   public mutating func didInsert(_ inserted: InsertionSuccess) {
     id = inserted.rowID

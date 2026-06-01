@@ -111,6 +111,7 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.MediaWordBankTagger.Product.METGDatabaseClientGRDB.targetDependency,
           PackageDependency.NyanimeSharedAnimeClipDatabase.Product.SharedAnimeClipDatabase.targetDependency,
           PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
         ]
       )
 
@@ -119,6 +120,7 @@ enum PackageTarget: String, CaseIterable {
         dependencies: createTargetDependencies(
           .AppDependencies,
           .HomeScene,
+          .MediaSourceImportService,
           .MediaSourcesListScene,
           .Shared,
           .SharedModels,
@@ -147,6 +149,7 @@ enum PackageTarget: String, CaseIterable {
     case .MediaListeningSRSDatabaseClient:
       return createPackageTarget(
         dependencies: createTargetDependencies(
+          .Shared,
           .SharedModels
         ) + [
           PackageDependency.SwiftTagged.Product.tagged.targetDependency,
@@ -158,6 +161,7 @@ enum PackageTarget: String, CaseIterable {
         dependencies: createTargetDependencies(
           .FSRS,
           .MediaListeningSRSDatabaseClient,
+          .Shared,
           .SharedModels
         ) + [
           PackageDependency.GRDB.Product.GRDB.targetDependency,
@@ -169,11 +173,14 @@ enum PackageTarget: String, CaseIterable {
       return createPackageTarget(
         dependencies: createTargetDependencies(
           .MediaListeningSRSDatabaseClient,
+          .Shared,
           .SharedModels
         ) + [
+          PackageDependency.ElixirShared.Product.ElixirShared.targetDependency,
           PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
           PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
           PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
         ]
       )
 
@@ -192,6 +199,7 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.MediaWordBankTagger.Product.SharedModels.targetDependency,
           PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
           PackageDependency.iYomi.Product.DictionaryModels.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
         ]
       )
 
@@ -247,6 +255,7 @@ enum PackageTarget: String, CaseIterable {
         ) + [
           PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
           PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
         ]
       )
 
@@ -264,6 +273,7 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
           PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
           PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
         ]
       )
 
@@ -325,6 +335,7 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.SwiftTagged.Product.tagged.targetDependency,
           PackageDependency.IdentifiedCollections.Product.identifiedCollections.targetDependency,
           PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseModels.targetDependency,
         ]
       )
 

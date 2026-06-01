@@ -2,6 +2,7 @@ import Foundation
 import ElixirShared
 import IYO_DictionaryClient
 import IYO_DictionaryModels
+import IYO_JapaneseParserClient
 import JML_JMLDatabaseClient
 import JML_JMLSharedModels
 import METG_METGDatabaseClient
@@ -27,6 +28,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
   private let jmlDatabaseClient: JMLDatabaseClient
   private let metgDatabaseClient: METGDatabaseClient
   private let dictionaryClient: DictionaryClient
+  private let japaneseParserClient: JapaneseParserClient
   private let srtParserClient: SRTParserClient
   private let clipExportService: ClipExportService
   private let exportedClipsDirectoryURL: URL
@@ -36,6 +38,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
   private var labelsBySubtitleIndex: [Int: [JapaneseTermLabelModel]] = [:]
   private var englishTranslationsByIndex: [Int: String] = [:]
   private var fullyKnownTermIDs: Set<Int64> = []
+  private var inflectionKeysByLabel: [Int64: String] = [:]
   private var maxIndex: Int = 0
   private var startSubtitleIndex: Int = 0
   private var endSubtitleIndex: Int = 0
@@ -50,6 +53,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
     jmlDatabaseClient: JMLDatabaseClient,
     metgDatabaseClient: METGDatabaseClient,
     dictionaryClient: DictionaryClient,
+    japaneseParserClient: JapaneseParserClient,
     srtParserClient: SRTParserClient,
     clipExportService: ClipExportService,
     exportedClipsDirectoryURL: URL
@@ -61,6 +65,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
     self.jmlDatabaseClient = jmlDatabaseClient
     self.metgDatabaseClient = metgDatabaseClient
     self.dictionaryClient = dictionaryClient
+    self.japaneseParserClient = japaneseParserClient
     self.srtParserClient = srtParserClient
     self.clipExportService = clipExportService
     self.exportedClipsDirectoryURL = exportedClipsDirectoryURL
@@ -116,6 +121,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
       jmlDatabaseClient,
       metgDatabaseClient,
       srtParserClient,
+      japaneseParserClient,
       presenter
     ] in
       do {
@@ -173,12 +179,49 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
           .init(japaneseTermIDs: Array(allTermIDs))
         )
 
+        // Derive inflection keys for all labels.
+        let allLabelInfos: [InflectionDerivationHelper.LabelInfo] = labelsBySubtitleIndex.flatMap { (idx, labels) in
+          labels.map { label in
+            InflectionDerivationHelper.LabelInfo(
+              subtitleIndex: idx,
+              utf16Range: label.range,
+              japaneseTermID: label.japaneseTermID.rawValue
+            )
+          }
+        }
+        var segTexts: [Int: String] = [:]
+        for (idx, seg) in segmentsByIndex { segTexts[idx] = seg.text }
+
+        let prefixLookup: @Sendable (String) async throws -> [InflectionDerivationHelper.LookupResult] = { surfaceText in
+          let response = try await japaneseParserClient.prefixDictionaryLookup(
+            .init(text: surfaceText, maxResultCount: nil)
+          )
+          return response.lookupResults.map { result in
+            InflectionDerivationHelper.LookupResult(
+              dictionaryID: result.dictionaryID,
+              inflectionKey: MSRSInflectionFormMapper.inflectionKey(from: result.inflections)
+            )
+          }
+        }
+        let derivedPairsByIndex = await InflectionDerivationHelper.deriveInflectionPairs(
+          labels: allLabelInfos,
+          segmentTextsByIndex: segTexts,
+          prefixLookup: prefixLookup
+        )
+        var inflectionKeysByLabel: [Int64: String] = [:]
+        for (_, pairs) in derivedPairsByIndex {
+          for pair in pairs {
+            inflectionKeysByLabel[pair.japaneseTermID] = pair.inflectionKey
+          }
+        }
+
         await MainActor.run {
           self.videoFileURL = resolved.videoURL
           self.subtitleSegmentsByIndex = segmentsByIndex
           self.labelsBySubtitleIndex = labelsBySubtitleIndex
           self.englishTranslationsByIndex = translationsByIndex
           self.fullyKnownTermIDs = knownResp.fullyKnownTermIDs
+          self.inflectionKeysByLabel = inflectionKeysByLabel
           self.maxIndex = maxIndex
           self.startSubtitleIndex = candidate.subtitleIndex
           self.endSubtitleIndex = candidate.subtitleIndex
@@ -258,22 +301,46 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
     let startTime = self.customStartTime
     let endTime = self.customEndTime
 
-    // Collect distinct tagged term IDs across every subtitle index in the card's range.
-    // The interactor already loaded `labelsBySubtitleIndex` from MWBT at viewDidLoad.
-    var termIDsForCard = Set<Int64>()
+    var labelInfos: [InflectionDerivationHelper.LabelInfo] = []
+    var segmentTextsByIndex: [Int: String] = [:]
     for index in startIndex...endIndex {
+      if let seg = subtitleSegmentsByIndex[index] {
+        segmentTextsByIndex[index] = seg.text
+      }
       for label in labelsBySubtitleIndex[index] ?? [] {
-        termIDsForCard.insert(label.japaneseTermID.rawValue)
+        labelInfos.append(.init(
+          subtitleIndex: index,
+          utf16Range: label.range,
+          japaneseTermID: label.japaneseTermID.rawValue
+        ))
       }
     }
-    let japaneseTermIDs = Array(termIDsForCard)
 
     let outputFileURL = exportedClipsDirectoryURL
       .appendingPathComponent("\(mediaSourceID.rawValue)", isDirectory: true)
       .appendingPathComponent("\(UUID().uuidString).mp4", isDirectory: false)
 
-    Task { [mediaListeningSRSDatabaseClient, clipExportService, exportedClipsDirectoryURL, presenter] in
+    Task { [mediaListeningSRSDatabaseClient, clipExportService, japaneseParserClient, exportedClipsDirectoryURL, presenter] in
       do {
+        let prefixLookup: @Sendable (String) async throws -> [InflectionDerivationHelper.LookupResult] = { surfaceText in
+          let response = try await japaneseParserClient.prefixDictionaryLookup(
+            .init(text: surfaceText, maxResultCount: nil)
+          )
+          return response.lookupResults.map { result in
+            InflectionDerivationHelper.LookupResult(
+              dictionaryID: result.dictionaryID,
+              inflectionKey: MSRSInflectionFormMapper.inflectionKey(from: result.inflections)
+            )
+          }
+        }
+
+        let derivedPairsByIndex = await InflectionDerivationHelper.deriveInflectionPairs(
+          labels: labelInfos,
+          segmentTextsByIndex: segmentTextsByIndex,
+          prefixLookup: prefixLookup
+        )
+        let japaneseTermLinks = Array(Set(derivedPairsByIndex.values.flatMap { $0 }))
+
         _ = try await clipExportService.exportClip(.init(
           sourceVideoFileURL: videoFileURL,
           startTimeSeconds: startTime,
@@ -293,7 +360,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
           clipStartTimeSeconds: startTime,
           clipEndTimeSeconds: endTime,
           clipRelativeFilePath: relativePath,
-          japaneseTermIDs: japaneseTermIDs
+          japaneseTermLinks: japaneseTermLinks
         ))
 
         await MainActor.run { presenter.presentDismiss() }
@@ -327,7 +394,8 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
             length: length
           ),
           termID: termIDValue,
-          isFullyKnown: fullyKnownTermIDs.contains(termIDValue)
+          isFullyKnown: fullyKnownTermIDs.contains(termIDValue),
+          inflectionKey: inflectionKeysByLabel[termIDValue] ?? ""
         ))
       }
       joinedParts.append(text)
@@ -342,11 +410,17 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
       .compactMap { englishTranslationsByIndex[$0] }
     let translationText = translationParts.isEmpty ? nil : translationParts.joined(separator: "\n")
 
+    let inflectionAnnotations = HighlightableTranscriptLabeledRange.buildInflectionAnnotationsText(
+      transcriptText: joinedText,
+      labeledRanges: labeledRanges
+    )
+
     presenter.presentViewModel(.init(
       subtitleIndexStart: startSubtitleIndex,
       subtitleIndexEnd: endSubtitleIndex,
       subtitleText: joinedText,
       labeledRanges: labeledRanges,
+      inflectionAnnotationsText: inflectionAnnotations,
       englishTranslationText: translationText,
       defaultStartTime: startSeg?.startTime ?? 0,
       defaultEndTime: endSeg?.endTime ?? 0,

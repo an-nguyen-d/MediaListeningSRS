@@ -6,6 +6,7 @@ public struct MediaSourceCardCandidateJapaneseTermLinkRecord: Codable, Fetchable
 
   public var candidateID: Int64
   public var japaneseTermID: Int64
+  public var inflectionKey: String
 
   public mutating func didInsert(_ inserted: InsertionSuccess) {
     id = inserted.rowID

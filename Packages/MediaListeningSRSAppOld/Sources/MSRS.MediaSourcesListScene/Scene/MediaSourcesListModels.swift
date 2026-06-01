@@ -1,4 +1,5 @@
 import Foundation
+import IYO_JapaneseParserClient
 import MSRS_MediaListeningSRSDatabaseClient
 import MSRS_MediaSourceImportPickerScene
 import MSRS_ProcessingQueueScene
