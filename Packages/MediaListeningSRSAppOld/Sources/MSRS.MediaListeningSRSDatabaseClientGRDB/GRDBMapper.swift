@@ -108,4 +108,50 @@ internal enum GRDBMapper {
       )
     }
   }
+
+  // MARK: - DailyAggregateSnapshot
+
+  internal enum DailyAggregateSnapshot {
+
+    internal static func mapToModel(from record: DailyAggregateSnapshotRecord) -> DailyAggregateSnapshotModel {
+      guard let rawID = record.id else {
+        fatalError("DailyAggregateSnapshotRecord missing id after fetch")
+      }
+
+      return .init(
+        id: .init(rawValue: rawID),
+        snapshotDate: record.snapshotDate,
+        totalActiveCards: record.totalActiveCards,
+        newCardCount: record.newCardCount,
+        learningCardCount: record.learningCardCount,
+        reviewCardCount: record.reviewCardCount,
+        relearningCardCount: record.relearningCardCount,
+        totalUniqueTermsCovered: record.totalUniqueTermsCovered,
+        totalFullyKnownTerms: record.totalFullyKnownTerms
+      )
+    }
+  }
+
+  // MARK: - DailyCardSnapshot
+
+  internal enum DailyCardSnapshot {
+
+    internal static func mapToModel(from record: DailyCardSnapshotRecord) -> DailyCardSnapshotModel {
+      guard let rawID = record.id else {
+        fatalError("DailyCardSnapshotRecord missing id after fetch")
+      }
+
+      return .init(
+        id: .init(rawValue: rawID),
+        aggregateSnapshotID: .init(rawValue: record.aggregateSnapshotID),
+        cardID: .init(rawValue: record.cardID),
+        stateRawValue: record.stateRawValue,
+        stability: record.stability,
+        difficulty: record.difficulty,
+        repCount: record.repCount,
+        lapseCount: record.lapseCount,
+        dueDate: record.dueDate
+      )
+    }
+  }
 }

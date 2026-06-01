@@ -13,6 +13,8 @@ public final class StudyStatsVC: UIViewController {
   private var todayCards: Int = 0
   private var todaySessions: Int = 0
   private var recentSessions: [StudySessionModel] = []
+  private var latestSnapshot: DailyAggregateSnapshotModel?
+  private var recentSnapshots: [DailyAggregateSnapshotModel] = []
 
   public init(dependencies: Dependencies) {
     self.dbClient = dependencies.mediaListeningSRSDatabaseClient
@@ -55,6 +57,8 @@ public final class StudyStatsVC: UIViewController {
 
     let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: startOfToday)!
 
+    let snapshotDateFormatter = Self.snapshotDateFormatter
+
     Task { [dbClient] in
       do {
         let todayResponse = try await dbClient.studySession.fetchInDateRange(
@@ -62,6 +66,12 @@ public final class StudyStatsVC: UIViewController {
         )
         let recentResponse = try await dbClient.studySession.fetchInDateRange(
           .init(startDate: thirtyDaysAgo, endDate: endOfToday)
+        )
+
+        let todayDateString = snapshotDateFormatter.string(from: now)
+        let thirtyDaysAgoString = snapshotDateFormatter.string(from: thirtyDaysAgo)
+        let snapshotsResponse = try await dbClient.dailySnapshot.fetchAggregatesInDateRange(
+          .init(startDate: thirtyDaysAgoString, endDate: todayDateString)
         )
 
         await MainActor.run {
@@ -72,6 +82,11 @@ public final class StudyStatsVC: UIViewController {
           self.todaySessions = todayResponse.models.count
 
           self.recentSessions = recentResponse.models.reversed()
+
+          let snapshots = snapshotsResponse.models
+          self.latestSnapshot = snapshots.last
+          self.recentSnapshots = Array(snapshots.reversed())
+
           self.tableView.reloadData()
         }
       } catch {
@@ -107,16 +122,25 @@ public final class StudyStatsVC: UIViewController {
     f.timeStyle = .short
     return f
   }()
+
+  private static let snapshotDateFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM-dd"
+    f.locale = Locale(identifier: "en_US_POSIX")
+    return f
+  }()
 }
 
 extension StudyStatsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 2 }
+  public func numberOfSections(in tableView: UITableView) -> Int { 4 }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     switch section {
     case 0: return 3
     case 1: return max(recentSessions.count, 1)
+    case 2: return latestSnapshot != nil ? 5 : 1
+    case 3: return max(recentSnapshots.count, 1)
     default: return 0
     }
   }
@@ -125,6 +149,8 @@ extension StudyStatsVC: UITableViewDataSource {
     switch section {
     case 0: return "Today"
     case 1: return "Recent Sessions (30 days)"
+    case 2: return "Deck Snapshot (Latest)"
+    case 3: return "Snapshot History (30 days)"
     default: return nil
     }
   }
@@ -167,6 +193,55 @@ extension StudyStatsVC: UITableViewDataSource {
       let endStr = Self.timeOnlyFormatter.string(from: session.endedAt)
       cell.textLabel?.text = "\(startStr) – \(endStr)"
       cell.detailTextLabel?.text = "\(formatDuration(duration))  ·  \(session.cardsReviewed) cards"
+      cell.detailTextLabel?.textColor = .secondaryLabel
+      return cell
+
+    case 2:
+      guard let snapshot = latestSnapshot else {
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        cell.textLabel?.text = "No snapshots yet"
+        cell.textLabel?.textColor = .secondaryLabel
+        cell.selectionStyle = .none
+        return cell
+      }
+      let cell = UITableViewCell(style: .value1, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      switch indexPath.row {
+      case 0:
+        cell.textLabel?.text = "Total Cards"
+        cell.detailTextLabel?.text = "\(snapshot.totalActiveCards)"
+      case 1:
+        cell.textLabel?.text = "By State"
+        cell.detailTextLabel?.text = "\(snapshot.newCardCount) new · \(snapshot.learningCardCount) learn · \(snapshot.reviewCardCount) review · \(snapshot.relearningCardCount) relearn"
+        cell.detailTextLabel?.adjustsFontSizeToFitWidth = true
+        cell.detailTextLabel?.minimumScaleFactor = 0.7
+      case 2:
+        cell.textLabel?.text = "Terms Covered"
+        cell.detailTextLabel?.text = "\(snapshot.totalUniqueTermsCovered)"
+      case 3:
+        cell.textLabel?.text = "Fully Known Terms"
+        cell.detailTextLabel?.text = "\(snapshot.totalFullyKnownTerms)"
+      case 4:
+        cell.textLabel?.text = "Snapshot Date"
+        cell.detailTextLabel?.text = snapshot.snapshotDate
+      default:
+        break
+      }
+      return cell
+
+    case 3:
+      if recentSnapshots.isEmpty {
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        cell.textLabel?.text = "No snapshots yet"
+        cell.textLabel?.textColor = .secondaryLabel
+        cell.selectionStyle = .none
+        return cell
+      }
+      let snapshot = recentSnapshots[indexPath.row]
+      let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = "\(snapshot.snapshotDate)  —  \(snapshot.totalActiveCards) cards"
+      cell.detailTextLabel?.text = "\(snapshot.totalUniqueTermsCovered) terms · \(snapshot.totalFullyKnownTerms) known · \(snapshot.newCardCount)N/\(snapshot.learningCardCount)L/\(snapshot.reviewCardCount)R/\(snapshot.relearningCardCount)RL"
       cell.detailTextLabel?.textColor = .secondaryLabel
       return cell
 

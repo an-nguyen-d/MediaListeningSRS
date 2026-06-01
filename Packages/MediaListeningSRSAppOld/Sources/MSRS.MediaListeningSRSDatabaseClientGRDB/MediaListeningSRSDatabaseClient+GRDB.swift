@@ -42,7 +42,8 @@ extension MediaListeningSRSDatabaseClient {
       mediaSourceCardCandidate: Self.mediaSourceCardCandidateEndpoints(databaseWriter: databaseWriter),
       srsCard: Self.srsCardEndpoints(databaseWriter: databaseWriter, fsrsParameters: fsrsParameters),
       japaneseTerm: Self.japaneseTermEndpoints(databaseWriter: databaseWriter),
-      studySession: Self.studySessionEndpoints(databaseWriter: databaseWriter)
+      studySession: Self.studySessionEndpoints(databaseWriter: databaseWriter),
+      dailySnapshot: Self.dailySnapshotEndpoints(databaseWriter: databaseWriter)
     )
   }
 
@@ -210,6 +211,39 @@ extension MediaListeningSRSDatabaseClient {
         index: "idx_ssr_startedAt",
         on: "studySessionRecord",
         columns: ["startedAt"]
+      )
+    }
+
+    migrator.registerMigration("6") { db in
+      try db.create(table: "dailyAggregateSnapshotRecord") { t in
+        t.autoIncrementedPrimaryKey("id")
+        t.column("snapshotDate", .text).notNull().unique()
+        t.column("totalActiveCards", .integer).notNull()
+        t.column("newCardCount", .integer).notNull()
+        t.column("learningCardCount", .integer).notNull()
+        t.column("reviewCardCount", .integer).notNull()
+        t.column("relearningCardCount", .integer).notNull()
+        t.column("totalUniqueTermsCovered", .integer).notNull()
+        t.column("totalFullyKnownTerms", .integer).notNull()
+      }
+
+      try db.create(table: "dailyCardSnapshotRecord") { t in
+        t.autoIncrementedPrimaryKey("id")
+        t.column("aggregateSnapshotID", .integer)
+          .notNull()
+          .references("dailyAggregateSnapshotRecord", onDelete: .cascade)
+        t.column("cardID", .integer).notNull()
+        t.column("stateRawValue", .integer).notNull()
+        t.column("stability", .double).notNull()
+        t.column("difficulty", .double).notNull()
+        t.column("repCount", .integer).notNull()
+        t.column("lapseCount", .integer).notNull()
+        t.column("dueDate", .datetime)
+      }
+      try db.create(
+        index: "idx_dcs_aggregateSnapshotID",
+        on: "dailyCardSnapshotRecord",
+        columns: ["aggregateSnapshotID"]
       )
     }
 

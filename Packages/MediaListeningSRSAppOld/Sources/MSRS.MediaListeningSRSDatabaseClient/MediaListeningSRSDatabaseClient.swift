@@ -538,17 +538,76 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
   }
   public var studySession: StudySession
 
+  // MARK: - DailySnapshot
+
+  public struct DailySnapshot: Sendable {
+
+    public enum CreateIfNeeded {
+      public struct Request: Sendable {
+        public let date: Date
+        public init(date: Date) { self.date = date }
+      }
+      public struct Response: Sendable, Equatable {
+        public let wasCreated: Bool
+        public init(wasCreated: Bool) { self.wasCreated = wasCreated }
+      }
+    }
+
+    public enum FetchAggregatesInDateRange {
+      public struct Request: Sendable {
+        public let startDate: String
+        public let endDate: String
+        public init(startDate: String, endDate: String) {
+          self.startDate = startDate
+          self.endDate = endDate
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public let models: [DailyAggregateSnapshotModel]
+        public init(models: [DailyAggregateSnapshotModel]) { self.models = models }
+      }
+    }
+
+    public enum FetchCardSnapshotsForDate {
+      public struct Request: Sendable {
+        public let snapshotDate: String
+        public init(snapshotDate: String) { self.snapshotDate = snapshotDate }
+      }
+      public struct Response: Sendable, Equatable {
+        public let models: [DailyCardSnapshotModel]
+        public init(models: [DailyCardSnapshotModel]) { self.models = models }
+      }
+    }
+
+    public var createIfNeeded: @Sendable (CreateIfNeeded.Request) async throws -> CreateIfNeeded.Response
+    public var fetchAggregatesInDateRange: @Sendable (FetchAggregatesInDateRange.Request) async throws -> FetchAggregatesInDateRange.Response
+    public var fetchCardSnapshotsForDate: @Sendable (FetchCardSnapshotsForDate.Request) async throws -> FetchCardSnapshotsForDate.Response
+
+    public init(
+      createIfNeeded: @Sendable @escaping (CreateIfNeeded.Request) async throws -> CreateIfNeeded.Response,
+      fetchAggregatesInDateRange: @Sendable @escaping (FetchAggregatesInDateRange.Request) async throws -> FetchAggregatesInDateRange.Response,
+      fetchCardSnapshotsForDate: @Sendable @escaping (FetchCardSnapshotsForDate.Request) async throws -> FetchCardSnapshotsForDate.Response
+    ) {
+      self.createIfNeeded = createIfNeeded
+      self.fetchAggregatesInDateRange = fetchAggregatesInDateRange
+      self.fetchCardSnapshotsForDate = fetchCardSnapshotsForDate
+    }
+  }
+  public var dailySnapshot: DailySnapshot
+
   public init(
     mediaSource: MediaSource,
     mediaSourceCardCandidate: MediaSourceCardCandidate,
     srsCard: SRSCard,
     japaneseTerm: JapaneseTerm,
-    studySession: StudySession
+    studySession: StudySession,
+    dailySnapshot: DailySnapshot
   ) {
     self.mediaSource = mediaSource
     self.mediaSourceCardCandidate = mediaSourceCardCandidate
     self.srsCard = srsCard
     self.japaneseTerm = japaneseTerm
     self.studySession = studySession
+    self.dailySnapshot = dailySnapshot
   }
 }

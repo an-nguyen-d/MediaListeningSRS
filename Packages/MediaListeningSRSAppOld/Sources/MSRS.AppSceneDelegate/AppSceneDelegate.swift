@@ -40,6 +40,20 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
     window.rootViewController = tabBarController
     window.makeKeyAndVisible()
     self.window = window
+
+    createDailySnapshotIfNeeded()
+  }
+
+  open func sceneDidBecomeActive(_ scene: UIScene) {
+    createDailySnapshotIfNeeded()
+  }
+
+  private func createDailySnapshotIfNeeded() {
+    Task {
+      try? await dependencies.mediaListeningSRSDatabaseClient.dailySnapshot.createIfNeeded(
+        .init(date: Date())
+      )
+    }
   }
 
 }

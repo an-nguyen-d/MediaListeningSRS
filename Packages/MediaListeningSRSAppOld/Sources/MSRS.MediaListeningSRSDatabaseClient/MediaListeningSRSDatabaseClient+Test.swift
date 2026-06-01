@@ -20,3 +20,14 @@ extension MediaListeningSRSDatabaseClient.StudySession {
     )
   }
 }
+
+extension MediaListeningSRSDatabaseClient.DailySnapshot {
+
+  public static func previewValue() -> Self {
+    .init(
+      createIfNeeded: { _ in fatalError() },
+      fetchAggregatesInDateRange: { _ in fatalError() },
+      fetchCardSnapshotsForDate: { _ in fatalError() }
+    )
+  }
+}
