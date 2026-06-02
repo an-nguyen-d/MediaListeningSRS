@@ -140,24 +140,42 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
     }
 
+    public enum FetchTermLinksForSource {
+      public struct Request: Sendable {
+        public let mediaSourceID: MediaSourceModel.ID
+        public init(mediaSourceID: MediaSourceModel.ID) {
+          self.mediaSourceID = mediaSourceID
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public let termLinksBySubtitleIndex: [Int: [TermInflectionPair]]
+        public init(termLinksBySubtitleIndex: [Int: [TermInflectionPair]]) {
+          self.termLinksBySubtitleIndex = termLinksBySubtitleIndex
+        }
+      }
+    }
+
     public var bulkCreate: @Sendable (BulkCreate.Request) async throws -> BulkCreate.Response
     public var setSkipped: @Sendable (SetSkipped.Request) async throws -> SetSkipped.Response
     public var observeForSource: @Sendable (ObserveForSource.Request) async throws -> ObserveForSource.Response
     public var fetchTermIDsForCandidate: @Sendable (FetchTermIDsForCandidate.Request) async throws -> FetchTermIDsForCandidate.Response
     public var fetchTotalCandidateCountForSource: @Sendable (FetchTotalCandidateCountForSource.Request) async throws -> FetchTotalCandidateCountForSource.Response
+    public var fetchTermLinksForSource: @Sendable (FetchTermLinksForSource.Request) async throws -> FetchTermLinksForSource.Response
 
     public init(
       bulkCreate: @Sendable @escaping (BulkCreate.Request) async throws -> BulkCreate.Response,
       setSkipped: @Sendable @escaping (SetSkipped.Request) async throws -> SetSkipped.Response,
       observeForSource: @Sendable @escaping (ObserveForSource.Request) async throws -> ObserveForSource.Response,
       fetchTermIDsForCandidate: @Sendable @escaping (FetchTermIDsForCandidate.Request) async throws -> FetchTermIDsForCandidate.Response,
-      fetchTotalCandidateCountForSource: @Sendable @escaping (FetchTotalCandidateCountForSource.Request) async throws -> FetchTotalCandidateCountForSource.Response
+      fetchTotalCandidateCountForSource: @Sendable @escaping (FetchTotalCandidateCountForSource.Request) async throws -> FetchTotalCandidateCountForSource.Response,
+      fetchTermLinksForSource: @Sendable @escaping (FetchTermLinksForSource.Request) async throws -> FetchTermLinksForSource.Response
     ) {
       self.bulkCreate = bulkCreate
       self.setSkipped = setSkipped
       self.observeForSource = observeForSource
       self.fetchTermIDsForCandidate = fetchTermIDsForCandidate
       self.fetchTotalCandidateCountForSource = fetchTotalCandidateCountForSource
+      self.fetchTermLinksForSource = fetchTermLinksForSource
     }
   }
   public var mediaSourceCardCandidate: MediaSourceCardCandidate

@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import MSRS_Shared
 import MSRS_SharedModels
 import MSRS_MediaListeningSRSDatabaseClient
 
@@ -105,6 +106,26 @@ extension MediaListeningSRSDatabaseClient {
             .filter(Column("mediaSourceID") == request.mediaSourceID.rawValue)
             .fetchCount(db)
           return .init(totalCount: count)
+        }
+      },
+      fetchTermLinksForSource: { request in
+        try await databaseWriter.read { db in
+          let rows = try Row.fetchAll(db, sql: """
+            SELECT c.subtitleIndex, l.japaneseTermID, l.inflectionKey
+            FROM mediaSourceCardCandidateJapaneseTermLinkRecord l
+            JOIN mediaSourceCardCandidateRecord c ON c.id = l.candidateID
+            WHERE c.mediaSourceID = ?
+          """, arguments: [request.mediaSourceID.rawValue])
+          var result: [Int: [TermInflectionPair]] = [:]
+          for row in rows {
+            let subtitleIndex: Int = row["subtitleIndex"]
+            let termID: Int64 = row["japaneseTermID"]
+            let inflectionKey: String = row["inflectionKey"]
+            result[subtitleIndex, default: []].append(
+              .init(japaneseTermID: termID, inflectionKey: inflectionKey)
+            )
+          }
+          return .init(termLinksBySubtitleIndex: result)
         }
       }
     )

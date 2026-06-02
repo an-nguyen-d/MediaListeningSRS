@@ -2,7 +2,6 @@ import Foundation
 import ElixirShared
 import IYO_DictionaryClient
 import IYO_DictionaryUIKit
-import IYO_JapaneseParserClient
 import MSRS_ClipExportService
 import MSRS_MediaListeningSRSDatabaseClient
 import MSRS_Shared
@@ -15,7 +14,6 @@ public enum CandidateDetailModels {
   public typealias Dependencies = HasClipExportService
                                 & HasDictionaryClient
                                 & HasExportedClipsDirectoryURL
-                                & HasJapaneseParserClient
                                 & HasJMLDatabaseClient
                                 & HasMediaListeningSRSDatabaseClient
                                 & HasMETGDatabaseClient

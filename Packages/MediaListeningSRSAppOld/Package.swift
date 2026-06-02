@@ -199,7 +199,6 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.MediaWordBankTagger.Product.SharedModels.targetDependency,
           PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
           PackageDependency.iYomi.Product.DictionaryModels.targetDependency,
-          PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
         ]
       )
 
