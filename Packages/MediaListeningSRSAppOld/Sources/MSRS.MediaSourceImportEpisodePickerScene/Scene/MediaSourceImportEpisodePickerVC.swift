@@ -16,6 +16,7 @@ public final class MediaSourceImportEpisodePickerVC: UIViewController, MediaSour
     dependencies: MediaSourceImportEpisodePickerModels.Dependencies
   ) {
     let presenter = MediaSourceImportEpisodePickerPresenter()
+    #if targetEnvironment(macCatalyst)
     self.interactor = MediaSourceImportEpisodePickerInteractor(
       presenter: presenter,
       seriesID: seriesID,
@@ -23,6 +24,14 @@ public final class MediaSourceImportEpisodePickerVC: UIViewController, MediaSour
       metgDatabaseClient: dependencies.metgDatabaseClient,
       mediaSourceImportService: dependencies.mediaSourceImportService
     )
+    #else
+    self.interactor = MediaSourceImportEpisodePickerInteractor(
+      presenter: presenter,
+      seriesID: seriesID,
+      jmlDatabaseClient: dependencies.jmlDatabaseClient,
+      mediaSourceImportService: dependencies.mediaSourceImportService
+    )
+    #endif
     super.init(nibName: nil, bundle: nil)
     presenter.displayer = self
     title = seriesTitle
@@ -62,13 +71,19 @@ public final class MediaSourceImportEpisodePickerVC: UIViewController, MediaSour
     contentView.setState(state)
   }
 
+  func displayImporting() {
+    contentView.setImporting(true)
+  }
+
   func displayImportError(_ message: String) {
+    contentView.setImporting(false)
     let alert = UIAlertController(title: "Import failed", message: message, preferredStyle: .alert)
     alert.addAction(.init(title: "OK", style: .default))
     present(alert, animated: true)
   }
 
   func displayImportSucceeded(createdSourceID: MediaSourceModel.ID, candidateCount: Int) {
+    contentView.setImporting(false)
     let alert = UIAlertController(
       title: "Imported",
       message: "Created MediaSource with \(candidateCount) candidate(s)",

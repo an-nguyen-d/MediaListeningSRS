@@ -22,6 +22,10 @@ public struct SRSCardRecord: Codable, FetchableRecord, MutablePersistableRecord,
   // MARK: - Clip file
   public var clipRelativeFilePath: String   // relative to Documents/MediaListeningSRS/clips/
 
+  // MARK: - Cached transcript (populated at card creation; backfilled for older cards on Mac)
+  public var cachedTranscriptText: String = ""
+  public var cachedEnglishTranslation: String = ""
+
   // MARK: - Card type (reserved for future review modes — only listening = 1 for now)
   public var cardType: Int = 1
 

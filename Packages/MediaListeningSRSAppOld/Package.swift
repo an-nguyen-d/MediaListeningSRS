@@ -12,6 +12,7 @@ let package = Package(
   dependencies: [
     PackageDependency.ComposableArchitecture.packageDependency,
     PackageDependency.ElixirShared.packageDependency,
+    PackageDependency.ElixirSync.packageDependency,
     PackageDependency.SwiftTagged.packageDependency,
     PackageDependency.SwiftCustomDump.packageDependency,
     PackageDependency.IdentifiedCollections.packageDependency,
@@ -21,8 +22,7 @@ let package = Package(
     PackageDependency.NyanimeSharedAnimeClipDatabase.packageDependency,
     PackageDependency.iYomi.packageDependency,
 
-    // Pre-stubbed but inactive — uncomment to activate.
-//    PackageDependency.Firebase.packageDependency,
+    PackageDependency.Firebase.packageDependency,
 //    PackageDependency.Lottie.packageDependency,
 //    PackageDependency.Superwall.packageDependency,
 //    PackageDependency.SQLiteSwift.packageDependency,
@@ -56,6 +56,7 @@ enum PackageTarget: String, CaseIterable {
   case AppSceneDelegate
   case CandidateDetailScene
   case ClipExportService
+  case ClipStorageClient
   case FSRS
   case HomeScene
   case MediaListeningSRSApp
@@ -98,6 +99,7 @@ enum PackageTarget: String, CaseIterable {
       return createPackageTarget(
         dependencies: createTargetDependencies(
           .ClipExportService,
+          .ClipStorageClient,
           .MediaListeningSRSDatabaseClient,
           .MediaListeningSRSDatabaseClientGRDB,
           .MediaSourceImportService,
@@ -112,13 +114,17 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.NyanimeSharedAnimeClipDatabase.Product.SharedAnimeClipDatabase.targetDependency,
           PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
           PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
-        ]
+          PackageDependency.ElixirSync.Product.ElixirSyncClient.targetDependency,
+          PackageDependency.ElixirSync.Product.ElixirSyncClientFirebase.targetDependency,
+        ],
+        resources: [.copy("Resources/dictionary.sqlite")]
       )
 
     case .AppSceneDelegate:
       return createPackageTarget(
         dependencies: createTargetDependencies(
           .AppDependencies,
+          .ClipStorageClient,
           .HomeScene,
           .MediaSourceImportService,
           .MediaSourcesListScene,
@@ -127,6 +133,7 @@ enum PackageTarget: String, CaseIterable {
           .StudyStatsScene,
           .WordsListScene
         ) + [
+          PackageDependency.ElixirSync.Product.ElixirSyncClient.targetDependency,
         ]
       )
 
@@ -188,6 +195,7 @@ enum PackageTarget: String, CaseIterable {
       return createPackageTarget(
         dependencies: createTargetDependencies(
           .ClipExportService,
+          .ClipStorageClient,
           .MediaListeningSRSDatabaseClient,
           .Shared,
           .SharedModels
@@ -207,6 +215,14 @@ enum PackageTarget: String, CaseIterable {
         dependencies: createTargetDependencies(
           .SharedModels
         ) + [
+        ]
+      )
+
+    case .ClipStorageClient:
+      return createPackageTarget(
+        dependencies: createTargetDependencies(
+        ) + [
+          PackageDependency.Firebase.Product.FirebaseStorage.targetDependency,
         ]
       )
 
@@ -252,6 +268,7 @@ enum PackageTarget: String, CaseIterable {
           .SharedModels,
           .SRSCardReviewScene
         ) + [
+          PackageDependency.ElixirSync.Product.ElixirSyncClient.targetDependency,
           PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
           PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
           PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
@@ -279,8 +296,10 @@ enum PackageTarget: String, CaseIterable {
     case .SettingsScene:
       return createPackageTarget(
         dependencies: createTargetDependencies(
+          .MediaListeningSRSDatabaseClient,
           .Shared
         ) + [
+          PackageDependency.ElixirSync.Product.ElixirSyncClient.targetDependency,
         ]
       )
 
@@ -288,17 +307,16 @@ enum PackageTarget: String, CaseIterable {
       return createPackageTarget(
         dependencies: createTargetDependencies(
           .ClipExportService,
+          .ClipStorageClient,
           .MediaListeningSRSDatabaseClient,
           .Shared,
           .SharedModels
         ) + [
           PackageDependency.ElixirShared.Product.ElixirShared.targetDependency,
-          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
-          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
-          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
-          PackageDependency.MediaWordBankTagger.Product.SharedModels.targetDependency,
           PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
           PackageDependency.iYomi.Product.DictionaryModels.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
+          PackageDependency.iYomi.Product.JapaneseModels.targetDependency,
         ]
       )
 
@@ -469,6 +487,31 @@ extension PackageDependency {
       }
     }
 
+  }
+
+}
+
+// MARK: - ElixirSync
+extension PackageDependency {
+
+  enum ElixirSync {
+    static let package = "ElixirSyncApp"
+
+    static var packageDependency: Package.Dependency {
+      .package(
+        url: "file:///Users/annguyen/Documents/2. Areas/Xcode Projects/ElixirSync/Packages/ElixirSyncApp",
+        branch: "main"
+      )
+    }
+
+    enum Product: String {
+      case ElixirSyncClient = "SYNC.ElixirSyncClient"
+      case ElixirSyncClientFirebase = "SYNC.ElixirSyncClientFirebase"
+
+      var targetDependency: Target.Dependency {
+        .product(name: self.rawValue, package: package)
+      }
+    }
   }
 
 }

@@ -15,12 +15,20 @@ public final class MediaSourceImportPickerVC: UIViewController, MediaSourceImpor
   public init(dependencies: MediaSourceImportPickerModels.Dependencies) {
     self.dependencies = dependencies
     let presenter = MediaSourceImportPickerPresenter()
+    #if targetEnvironment(macCatalyst)
     self.interactor = MediaSourceImportPickerInteractor(
       presenter: presenter,
       jmlDatabaseClient: dependencies.jmlDatabaseClient,
       metgDatabaseClient: dependencies.metgDatabaseClient,
       mediaSourceImportService: dependencies.mediaSourceImportService
     )
+    #else
+    self.interactor = MediaSourceImportPickerInteractor(
+      presenter: presenter,
+      jmlDatabaseClient: dependencies.jmlDatabaseClient,
+      mediaSourceImportService: dependencies.mediaSourceImportService
+    )
+    #endif
     super.init(nibName: nil, bundle: nil)
     presenter.displayer = self
   }

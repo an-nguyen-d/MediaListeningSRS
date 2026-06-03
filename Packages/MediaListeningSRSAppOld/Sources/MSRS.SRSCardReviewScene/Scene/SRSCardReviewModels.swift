@@ -2,21 +2,20 @@ import Foundation
 import ElixirShared
 import IYO_DictionaryClient
 import IYO_DictionaryUIKit
-import JML_JMLDatabaseClient
-import METG_METGDatabaseClient
+import IYO_JapaneseParserClient
 import MSRS_ClipExportService
+import MSRS_ClipStorageClient
 import MSRS_MediaListeningSRSDatabaseClient
 import MSRS_Shared
 import MSRS_SharedModels
 
 public enum SRSCardReviewModels {
 
-  public typealias Dependencies = HasDictionaryClient
+  public typealias Dependencies = HasClipStorageClient
+                                & HasDictionaryClient
                                 & HasExportedClipsDirectoryURL
-                                & HasJMLDatabaseClient
+                                & HasJapaneseParserClient
                                 & HasMediaListeningSRSDatabaseClient
-                                & HasMETGDatabaseClient
-                                & HasSRTParserClient
 
   public enum Action {
     case viewDidLoad
@@ -28,6 +27,8 @@ public enum SRSCardReviewModels {
     case frontVideoVisibilityChanged(SRSCardModel.FrontVideoVisibility)
     case playbackSpeedChanged(Double)
     case submitTypedAnswer(String)
+    case transcriptTappedAtCharacterIndex(Int)
+    case autoLoopVideoChanged(Bool)
   }
 
   public enum Grade: Sendable, Equatable {
@@ -103,11 +104,18 @@ public enum SRSCardReviewModels {
     public let japaneseTermID: Int64
     public let viewModel: DictionaryLookupViewModel
     public let isAlreadyFullyKnown: Bool
+    public let tappedRange: NSRange?
 
-    public init(japaneseTermID: Int64, viewModel: DictionaryLookupViewModel, isAlreadyFullyKnown: Bool) {
+    public init(
+      japaneseTermID: Int64,
+      viewModel: DictionaryLookupViewModel,
+      isAlreadyFullyKnown: Bool,
+      tappedRange: NSRange? = nil
+    ) {
       self.japaneseTermID = japaneseTermID
       self.viewModel = viewModel
       self.isAlreadyFullyKnown = isAlreadyFullyKnown
+      self.tappedRange = tappedRange
     }
   }
 }

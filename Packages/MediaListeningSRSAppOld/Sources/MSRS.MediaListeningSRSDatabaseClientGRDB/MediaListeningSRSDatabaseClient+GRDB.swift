@@ -43,7 +43,11 @@ extension MediaListeningSRSDatabaseClient {
       srsCard: Self.srsCardEndpoints(databaseWriter: databaseWriter, fsrsParameters: fsrsParameters),
       japaneseTerm: Self.japaneseTermEndpoints(databaseWriter: databaseWriter),
       studySession: Self.studySessionEndpoints(databaseWriter: databaseWriter),
-      dailySnapshot: Self.dailySnapshotEndpoints(databaseWriter: databaseWriter)
+      dailySnapshot: Self.dailySnapshotEndpoints(databaseWriter: databaseWriter),
+      appSettings: Self.appSettingsEndpoints(databaseWriter: databaseWriter),
+      close: { @Sendable in
+        try (databaseWriter as? DatabaseQueue)?.close()
+      }
     )
   }
 
@@ -313,6 +317,31 @@ extension MediaListeningSRSDatabaseClient {
       try db.create(index: "idx_jtccr_termID",
                     on: "japaneseTermCardCoverageRecord",
                     columns: ["japaneseTermID"])
+    }
+
+    migrator.registerMigration("8") { db in
+      try db.alter(table: "srsCardRecord") { t in
+        t.add(column: "cachedTranscriptText", .text).notNull().defaults(to: "")
+        t.add(column: "cachedEnglishTranslation", .text).notNull().defaults(to: "")
+      }
+    }
+
+    migrator.registerMigration("9") { db in
+      try db.alter(table: "appSettingsRecord") { t in
+        t.add(column: "desiredRetention", .double).notNull().defaults(to: 0.9)
+        t.add(column: "showFrontTranscript", .boolean).notNull().defaults(to: true)
+        t.add(column: "minimumCardCoverageCount", .integer).notNull().defaults(to: 50)
+        t.add(column: "studySessionInactivityTimeout", .integer).notNull().defaults(to: 300)
+        t.add(column: "requireSkipOrMakeCardConfirmation", .boolean).notNull().defaults(to: true)
+        t.add(column: "autoLoopVideo", .boolean).notNull().defaults(to: false)
+        t.add(column: "llmGradingPrompt", .text).notNull().defaults(to: "")
+      }
+    }
+
+    migrator.registerMigration("10") { db in
+      try db.alter(table: "appSettingsRecord") { t in
+        t.add(column: "syncIntervalSeconds", .integer).notNull().defaults(to: 60)
+      }
     }
 
     return migrator

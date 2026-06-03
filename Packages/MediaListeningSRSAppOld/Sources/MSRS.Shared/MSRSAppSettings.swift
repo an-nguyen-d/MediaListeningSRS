@@ -2,92 +2,10 @@ import Foundation
 
 public enum MSRSAppSettings {
 
-  private static let requireConfirmationKey = "MSRS.Settings.requireSkipOrMakeCardConfirmation"
-  public static let desiredRetentionKey = "MSRS.Settings.desiredRetention"
   public static let desiredRetentionDefault: Double = 0.9
-
-  public static var requireSkipOrMakeCardConfirmation: Bool {
-    get {
-      if UserDefaults.standard.object(forKey: requireConfirmationKey) == nil {
-        return true
-      }
-      return UserDefaults.standard.bool(forKey: requireConfirmationKey)
-    }
-    set {
-      UserDefaults.standard.set(newValue, forKey: requireConfirmationKey)
-    }
-  }
-
-  public static var desiredRetention: Double {
-    get {
-      if UserDefaults.standard.object(forKey: desiredRetentionKey) == nil {
-        return desiredRetentionDefault
-      }
-      return UserDefaults.standard.double(forKey: desiredRetentionKey)
-    }
-    set {
-      UserDefaults.standard.set(newValue, forKey: desiredRetentionKey)
-    }
-  }
-
-  private static let minimumCardCoverageCountKey = "MSRS.Settings.minimumCardCoverageCount"
   public static let minimumCardCoverageCountDefault: Int = 50
-
-  private static let showFrontTranscriptKey = "MSRS.Settings.showFrontTranscript"
-
-  public static var showFrontTranscript: Bool {
-    get {
-      if UserDefaults.standard.object(forKey: showFrontTranscriptKey) == nil {
-        return true
-      }
-      return UserDefaults.standard.bool(forKey: showFrontTranscriptKey)
-    }
-    set {
-      UserDefaults.standard.set(newValue, forKey: showFrontTranscriptKey)
-    }
-  }
-
-  public static var minimumCardCoverageCount: Int {
-    get {
-      if UserDefaults.standard.object(forKey: minimumCardCoverageCountKey) == nil {
-        return minimumCardCoverageCountDefault
-      }
-      let value = UserDefaults.standard.integer(forKey: minimumCardCoverageCountKey)
-      return max(1, value)
-    }
-    set {
-      UserDefaults.standard.set(max(1, newValue), forKey: minimumCardCoverageCountKey)
-    }
-  }
-
-  private static let studySessionInactivityTimeoutKey = "MSRS.Settings.studySessionInactivityTimeout"
   public static let studySessionInactivityTimeoutDefault: Int = 300
-
-  public static var studySessionInactivityTimeout: Int {
-    get {
-      if UserDefaults.standard.object(forKey: studySessionInactivityTimeoutKey) == nil {
-        return studySessionInactivityTimeoutDefault
-      }
-      let value = UserDefaults.standard.integer(forKey: studySessionInactivityTimeoutKey)
-      return max(30, value)
-    }
-    set {
-      UserDefaults.standard.set(max(30, newValue), forKey: studySessionInactivityTimeoutKey)
-    }
-  }
-
-  // MARK: - Video Auto-Loop
-
-  private static let autoLoopVideoKey = "MSRS.Settings.autoLoopVideo"
-
-  public static var autoLoopVideo: Bool {
-    get { UserDefaults.standard.bool(forKey: autoLoopVideoKey) }
-    set { UserDefaults.standard.set(newValue, forKey: autoLoopVideoKey) }
-  }
-
-  // MARK: - LLM Grading
-
-  private static let llmGradingPromptKey = "MSRS.Settings.llmGradingPrompt"
+  public static let syncIntervalSecondsDefault: Int = 60
   public static let llmGradingPromptDefault: String = """
     You are a Japanese listening comprehension grader for a spaced repetition system. The learner \
     listened to Japanese audio and typed what they understood in English. Assess whether they \
@@ -122,8 +40,64 @@ public enum MSRSAppSettings {
     {"score": N, "reasoning": "..."}
     """
 
+  nonisolated(unsafe) private static var cached = AppSettingsModel(
+    desiredRetention: desiredRetentionDefault,
+    showFrontTranscript: true,
+    minimumCardCoverageCount: minimumCardCoverageCountDefault,
+    studySessionInactivityTimeout: studySessionInactivityTimeoutDefault,
+    requireSkipOrMakeCardConfirmation: true,
+    autoLoopVideo: false,
+    llmGradingPrompt: "",
+    syncIntervalSeconds: syncIntervalSecondsDefault
+  )
+
+  public static func loadFromModel(_ model: AppSettingsModel) {
+    cached = model
+  }
+
+  public static func currentModel() -> AppSettingsModel {
+    cached
+  }
+
+  public static var requireSkipOrMakeCardConfirmation: Bool {
+    get { cached.requireSkipOrMakeCardConfirmation }
+    set { cached.requireSkipOrMakeCardConfirmation = newValue }
+  }
+
+  public static var desiredRetention: Double {
+    get { cached.desiredRetention }
+    set { cached.desiredRetention = newValue }
+  }
+
+  public static var showFrontTranscript: Bool {
+    get { cached.showFrontTranscript }
+    set { cached.showFrontTranscript = newValue }
+  }
+
+  public static var minimumCardCoverageCount: Int {
+    get { max(1, cached.minimumCardCoverageCount) }
+    set { cached.minimumCardCoverageCount = max(1, newValue) }
+  }
+
+  public static var studySessionInactivityTimeout: Int {
+    get { max(30, cached.studySessionInactivityTimeout) }
+    set { cached.studySessionInactivityTimeout = max(30, newValue) }
+  }
+
+  public static var autoLoopVideo: Bool {
+    get { cached.autoLoopVideo }
+    set { cached.autoLoopVideo = newValue }
+  }
+
   public static var llmGradingPrompt: String {
-    get { UserDefaults.standard.string(forKey: llmGradingPromptKey) ?? llmGradingPromptDefault }
-    set { UserDefaults.standard.set(newValue, forKey: llmGradingPromptKey) }
+    get {
+      cached.llmGradingPrompt.isEmpty ? llmGradingPromptDefault : cached.llmGradingPrompt
+    }
+    set { cached.llmGradingPrompt = newValue }
+  }
+
+  public static var syncIntervalSeconds: Int {
+    get { max(10, cached.syncIntervalSeconds) }
+    set { cached.syncIntervalSeconds = max(10, newValue) }
   }
 }

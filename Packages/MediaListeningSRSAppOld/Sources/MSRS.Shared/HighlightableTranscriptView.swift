@@ -22,6 +22,7 @@ public final class HighlightableTranscriptView: UITextView {
   public static let termIDAttributeKey = NSAttributedString.Key("MSRS.HighlightableTranscriptView.termID")
 
   public var onTermTapped: ((Int64) -> Void)?
+  public var onCharacterTapped: ((Int) -> Void)?
 
   public var transcriptFont: UIFont = .preferredFont(forTextStyle: .title3) {
     didSet { renderCurrent() }
@@ -106,6 +107,10 @@ public final class HighlightableTranscriptView: UITextView {
   public func boundingFrameForTermID(_ termID: Int64, in containerView: UIView) -> CGRect? {
     guard let labeled = currentLabeledRanges.first(where: { $0.termID == termID }) else { return nil }
     return boundingFrameForRange(labeled.range, in: containerView)
+  }
+
+  public func boundingFrameForCharacterRange(_ range: NSRange, in containerView: UIView) -> CGRect? {
+    return boundingFrameForRange(range, in: containerView)
   }
 
   private func boundingFrameForRange(_ range: NSRange, in containerView: UIView) -> CGRect? {
@@ -232,6 +237,8 @@ public final class HighlightableTranscriptView: UITextView {
       effectiveRange: nil
     ) as? NSNumber {
       onTermTapped?(value.int64Value)
+    } else {
+      onCharacterTapped?(charIndex)
     }
   }
 }

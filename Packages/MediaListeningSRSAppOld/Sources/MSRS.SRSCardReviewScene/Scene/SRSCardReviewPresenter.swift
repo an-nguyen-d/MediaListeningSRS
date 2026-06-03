@@ -9,6 +9,7 @@ protocol SRSCardReviewDisplayer: AnyObject {
   func displayLLMGradingStarted(userAnswer: String)
   func displayLLMGradeResult(_ result: SRSCardReviewModels.LLMGradeResult)
   func displayLLMGradingError(_ message: String)
+  func displayClipDownloading()
   func displayEmptyDeck()
   func displayDeckCompleted()
   func displayError(_ message: String)
@@ -45,6 +46,10 @@ final class SRSCardReviewPresenter {
 
   func presentLLMGradingError(_ message: String) {
     displayer?.displayLLMGradingError(message)
+  }
+
+  func presentClipDownloading() {
+    displayer?.displayClipDownloading()
   }
 
   func presentEmptyDeck() {

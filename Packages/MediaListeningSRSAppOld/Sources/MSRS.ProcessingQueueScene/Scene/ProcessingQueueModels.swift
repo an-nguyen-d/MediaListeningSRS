@@ -1,7 +1,9 @@
 import Foundation
 import ElixirShared
 import JML_JMLDatabaseClient
+#if targetEnvironment(macCatalyst)
 import METG_METGDatabaseClient
+#endif
 import IYO_DictionaryClient
 import IYO_JapaneseParserClient
 import MSRS_CandidateDetailScene

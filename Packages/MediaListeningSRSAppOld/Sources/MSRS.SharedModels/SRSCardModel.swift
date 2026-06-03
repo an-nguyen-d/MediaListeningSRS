@@ -34,6 +34,9 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
 
   public let clipRelativeFilePath: String
 
+  public let cachedTranscriptText: String
+  public let cachedEnglishTranslation: String
+
   public var frontVideoVisibility: FrontVideoVisibility
   public var playbackSpeed: Double
   public var consecutiveCorrectAtCurrentSpeed: Int
@@ -48,6 +51,8 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     clipStartTimeSeconds: TimeInterval,
     clipEndTimeSeconds: TimeInterval,
     clipRelativeFilePath: String,
+    cachedTranscriptText: String = "",
+    cachedEnglishTranslation: String = "",
     frontVideoVisibility: FrontVideoVisibility = .blackScreen,
     playbackSpeed: Double = 1.0,
     consecutiveCorrectAtCurrentSpeed: Int = 0
@@ -61,6 +66,8 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     self.clipStartTimeSeconds = clipStartTimeSeconds
     self.clipEndTimeSeconds = clipEndTimeSeconds
     self.clipRelativeFilePath = clipRelativeFilePath
+    self.cachedTranscriptText = cachedTranscriptText
+    self.cachedEnglishTranslation = cachedEnglishTranslation
     self.frontVideoVisibility = frontVideoVisibility
     self.playbackSpeed = playbackSpeed
     self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed

@@ -12,11 +12,10 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     let presenter = SRSCardReviewPresenter()
     self.interactor = SRSCardReviewInteractor(
       presenter: presenter,
+      clipStorageClient: dependencies.clipStorageClient,
       mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
-      jmlDatabaseClient: dependencies.jmlDatabaseClient,
-      metgDatabaseClient: dependencies.metgDatabaseClient,
       dictionaryClient: dependencies.dictionaryClient,
-      srtParserClient: dependencies.srtParserClient,
+      japaneseParserClient: dependencies.japaneseParserClient,
       exportedClipsDirectoryURL: dependencies.exportedClipsDirectoryURL
     )
     super.init(nibName: nil, bundle: nil)
@@ -55,6 +54,19 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     }
     contentView.onSubmitTypedAnswer = { [weak self] answer in
       self?.interactor.sendAction(.submitTypedAnswer(answer))
+    }
+    contentView.onTranscriptTappedAtCharacterIndex = { [weak self] charIndex in
+      self?.interactor.sendAction(.transcriptTappedAtCharacterIndex(charIndex))
+    }
+    contentView.onAutoLoopVideoChanged = { [weak self] isOn in
+      self?.interactor.sendAction(.autoLoopVideoChanged(isOn))
+    }
+    if navigationController?.presentingViewController != nil {
+      navigationItem.leftBarButtonItem = UIBarButtonItem(
+        barButtonSystemItem: .done,
+        target: self,
+        action: #selector(doneTapped)
+      )
     }
     interactor.sendAction(.viewDidLoad)
   }
@@ -99,6 +111,10 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     interactor.sendAction(.gradedAndNext(.pass))
   }
 
+  @objc private func doneTapped() {
+    dismiss(animated: true)
+  }
+
   // MARK: - SRSCardReviewDisplayer
 
   func displayCard(_ viewModel: SRSCardReviewModels.CardViewModel) {
@@ -114,9 +130,13 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
   }
 
   func displayDictionaryLookup(_ result: SRSCardReviewModels.DictionaryLookupResult) {
-    guard let tappedWordFrame = contentView.boundingFrameForTermID(result.japaneseTermID, in: view) else {
-      return
+    let tappedWordFrame: CGRect?
+    if let range = result.tappedRange {
+      tappedWordFrame = contentView.boundingFrameForCharacterRange(range, in: view)
+    } else {
+      tappedWordFrame = contentView.boundingFrameForTermID(result.japaneseTermID, in: view)
     }
+    guard let tappedWordFrame else { return }
     richDictionaryPopup?.dismiss()
     let popup = RichDictionaryPopupController(hostView: view)
     richDictionaryPopup = popup
@@ -132,6 +152,10 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
         self?.richDictionaryPopup = nil
       }
     )
+  }
+
+  func displayClipDownloading() {
+    contentView.showEmptyState(message: "Downloading clip…")
   }
 
   func displayEmptyDeck() {

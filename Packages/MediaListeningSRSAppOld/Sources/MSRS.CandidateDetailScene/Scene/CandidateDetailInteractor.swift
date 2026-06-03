@@ -4,9 +4,12 @@ import IYO_DictionaryClient
 import IYO_DictionaryModels
 import JML_JMLDatabaseClient
 import JML_JMLSharedModels
-import METG_METGDatabaseClient
 import METG_SharedModels
+#if targetEnvironment(macCatalyst)
+import METG_METGDatabaseClient
+#endif
 import MSRS_ClipExportService
+import MSRS_ClipStorageClient
 import MSRS_MediaListeningSRSDatabaseClient
 import MSRS_Shared
 import MSRS_SharedModels
@@ -25,10 +28,13 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
 
   private let mediaListeningSRSDatabaseClient: MediaListeningSRSDatabaseClient
   private let jmlDatabaseClient: JMLDatabaseClient
+  #if targetEnvironment(macCatalyst)
   private let metgDatabaseClient: METGDatabaseClient
+  #endif
   private let dictionaryClient: DictionaryClient
   private let srtParserClient: SRTParserClient
   private let clipExportService: ClipExportService
+  private let clipStorageClient: ClipStorageClient
   private let exportedClipsDirectoryURL: URL
 
   private var videoFileURL: URL?
@@ -43,6 +49,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
   private var customStartTime: TimeInterval = 0
   private var customEndTime: TimeInterval = 0
 
+  #if targetEnvironment(macCatalyst)
   init(
     presenter: CandidateDetailPresenter,
     candidateID: MediaSourceCardCandidateModel.ID,
@@ -53,6 +60,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
     dictionaryClient: DictionaryClient,
     srtParserClient: SRTParserClient,
     clipExportService: ClipExportService,
+    clipStorageClient: ClipStorageClient,
     exportedClipsDirectoryURL: URL
   ) {
     self.presenter = presenter
@@ -64,8 +72,34 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
     self.dictionaryClient = dictionaryClient
     self.srtParserClient = srtParserClient
     self.clipExportService = clipExportService
+    self.clipStorageClient = clipStorageClient
     self.exportedClipsDirectoryURL = exportedClipsDirectoryURL
   }
+  #else
+  init(
+    presenter: CandidateDetailPresenter,
+    candidateID: MediaSourceCardCandidateModel.ID,
+    mediaSourceID: MediaSourceModel.ID,
+    mediaListeningSRSDatabaseClient: MediaListeningSRSDatabaseClient,
+    jmlDatabaseClient: JMLDatabaseClient,
+    dictionaryClient: DictionaryClient,
+    srtParserClient: SRTParserClient,
+    clipExportService: ClipExportService,
+    clipStorageClient: ClipStorageClient,
+    exportedClipsDirectoryURL: URL
+  ) {
+    self.presenter = presenter
+    self.candidateID = candidateID
+    self.mediaSourceID = mediaSourceID
+    self.mediaListeningSRSDatabaseClient = mediaListeningSRSDatabaseClient
+    self.jmlDatabaseClient = jmlDatabaseClient
+    self.dictionaryClient = dictionaryClient
+    self.srtParserClient = srtParserClient
+    self.clipExportService = clipExportService
+    self.clipStorageClient = clipStorageClient
+    self.exportedClipsDirectoryURL = exportedClipsDirectoryURL
+  }
+  #endif
 
   func sendAction(_ action: CandidateDetailModels.Action) {
     switch action {
@@ -112,13 +146,7 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
   private func handleViewDidLoad() {
     let candidateID = self.candidateID
     let mediaSourceID = self.mediaSourceID
-    Task { [
-      mediaListeningSRSDatabaseClient,
-      jmlDatabaseClient,
-      metgDatabaseClient,
-      srtParserClient,
-      presenter
-    ] in
+    Task { [mediaListeningSRSDatabaseClient, jmlDatabaseClient, srtParserClient, presenter] in
       do {
         let candidatesStream = try await mediaListeningSRSDatabaseClient.mediaSourceCardCandidate.observeForSource(
           .init(mediaSourceID: mediaSourceID)
@@ -158,15 +186,17 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
           subtitleURL: resolved.subtitleURL
         )
 
+        var labelsBySubtitleIndex: [Int: [JapaneseTermLabelModel]] = [:]
+        #if targetEnvironment(macCatalyst)
         let mwbtResp = try await metgDatabaseClient.mediaSubtitlesList.fetchByFileIDs(
           .init(fileIDs: [resolved.subtitleLocalizedLocalFileID])
         )
-        var labelsBySubtitleIndex: [Int: [JapaneseTermLabelModel]] = [:]
         if let row = mwbtResp.subtitles.first {
           for label in row.labels {
             labelsBySubtitleIndex[label.subtitleIndex.rawValue, default: []].append(label)
           }
         }
+        #endif
 
         let allTermIDs = Set(labelsBySubtitleIndex.values.flatMap { $0 }.map { $0.japaneseTermID.rawValue })
         let knownResp = try await mediaListeningSRSDatabaseClient.japaneseTerm.fetchFullyKnownTermIDs(
@@ -270,38 +300,88 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
       }
     }
 
+    let transcriptParts = (startIndex...endIndex).compactMap { subtitleSegmentsByIndex[$0]?.text }
+    let transcriptText = transcriptParts.joined(separator: "\n")
+    let translationParts = (startIndex...endIndex).compactMap { englishTranslationsByIndex[$0] }
+    let translationText = translationParts.joined(separator: "\n")
+
     let outputFileURL = exportedClipsDirectoryURL
       .appendingPathComponent("\(mediaSourceID.rawValue)", isDirectory: true)
       .appendingPathComponent("\(UUID().uuidString).mp4", isDirectory: false)
 
-    Task { [mediaListeningSRSDatabaseClient, clipExportService, exportedClipsDirectoryURL, presenter] in
+    Task { [mediaListeningSRSDatabaseClient, clipExportService, clipStorageClient, exportedClipsDirectoryURL, presenter] in
       do {
-        _ = try await clipExportService.exportClip(.init(
-          sourceVideoFileURL: videoFileURL,
-          startTimeSeconds: startTime,
-          endTimeSeconds: endTime,
-          outputFileURL: outputFileURL
-        ))
-
-        let relativePath = outputFileURL.path.replacingOccurrences(
-          of: exportedClipsDirectoryURL.path,
-          with: ""
-        ).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-
-        _ = try await mediaListeningSRSDatabaseClient.srsCard.create(.init(
+        let createResponse = try await mediaListeningSRSDatabaseClient.srsCard.create(.init(
           mediaSourceID: mediaSourceID,
           subtitleIndexStart: startIndex,
           subtitleIndexEnd: endIndex,
           clipStartTimeSeconds: startTime,
           clipEndTimeSeconds: endTime,
-          clipRelativeFilePath: relativePath,
+          clipRelativeFilePath: "",
+          cachedTranscriptText: transcriptText,
+          cachedEnglishTranslation: translationText,
           japaneseTermLinks: Array(japaneseTermLinks)
         ))
+        let cardID = createResponse.model.id
 
         await MainActor.run { presenter.presentDismiss() }
+
+        await ClipExportManager.shared.enqueue(
+          request: .init(
+            sourceVideoFileURL: videoFileURL,
+            startTimeSeconds: startTime,
+            endTimeSeconds: endTime,
+            outputFileURL: outputFileURL
+          ),
+          exportClip: clipExportService.exportClip,
+          onComplete: { exportedFileURL in
+            let relativePath = exportedFileURL.path.replacingOccurrences(
+              of: exportedClipsDirectoryURL.path,
+              with: ""
+            ).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+            do {
+              _ = try await mediaListeningSRSDatabaseClient.srsCard.updateClipPath(.init(
+                cardID: cardID,
+                clipRelativeFilePath: relativePath
+              ))
+              print("[ClipExportManager] Clip ready for card \(cardID.rawValue): \(relativePath)")
+            } catch {
+              print("[ClipExportManager] DB update failed for card \(cardID.rawValue): \(error)")
+              return
+            }
+
+            #if targetEnvironment(macCatalyst)
+            let remotePath = "clips/\(relativePath)"
+            do {
+              _ = try await clipStorageClient.upload(.init(
+                localFileURL: exportedFileURL,
+                remotePath: remotePath
+              ))
+              print("[ClipStorage] Uploaded \(remotePath)")
+            } catch {
+              print("[ClipStorage] Upload failed for \(remotePath): \(error)")
+            }
+
+            let thumbnailURL = exportedFileURL.deletingPathExtension().appendingPathExtension("jpg")
+            if FileManager.default.fileExists(atPath: thumbnailURL.path) {
+              let thumbRemotePath = "clips/\(relativePath.replacingOccurrences(of: ".mp4", with: ".jpg"))"
+              do {
+                _ = try await clipStorageClient.upload(.init(
+                  localFileURL: thumbnailURL,
+                  remotePath: thumbRemotePath
+                ))
+                print("[ClipStorage] Uploaded thumbnail \(thumbRemotePath)")
+              } catch {
+                print("[ClipStorage] Thumbnail upload failed: \(error)")
+              }
+            }
+            #endif
+          }
+        )
       } catch {
         await MainActor.run {
-          presenter.presentError("Confirm failed: \(error.localizedDescription)")
+          presenter.presentError("Card creation failed: \(error.localizedDescription)")
         }
       }
     }

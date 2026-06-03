@@ -192,6 +192,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
         public let clipStartTimeSeconds: TimeInterval
         public let clipEndTimeSeconds: TimeInterval
         public let clipRelativeFilePath: String
+        public let cachedTranscriptText: String
+        public let cachedEnglishTranslation: String
         public let japaneseTermLinks: [TermInflectionPair]
 
         public init(
@@ -201,6 +203,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
           clipStartTimeSeconds: TimeInterval,
           clipEndTimeSeconds: TimeInterval,
           clipRelativeFilePath: String,
+          cachedTranscriptText: String,
+          cachedEnglishTranslation: String,
           japaneseTermLinks: [TermInflectionPair]
         ) {
           self.mediaSourceID = mediaSourceID
@@ -209,6 +213,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
           self.clipStartTimeSeconds = clipStartTimeSeconds
           self.clipEndTimeSeconds = clipEndTimeSeconds
           self.clipRelativeFilePath = clipRelativeFilePath
+          self.cachedTranscriptText = cachedTranscriptText
+          self.cachedEnglishTranslation = cachedEnglishTranslation
           self.japaneseTermLinks = japaneseTermLinks
         }
       }
@@ -268,7 +274,11 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
     public enum FetchDueCards {
       public struct Request: Sendable {
         public let asOf: Date
-        public init(asOf: Date) { self.asOf = asOf }
+        public let limit: Int?
+        public init(asOf: Date, limit: Int? = nil) {
+          self.asOf = asOf
+          self.limit = limit
+        }
       }
       public struct Response: Sendable, Equatable {
         public let cards: [SRSCardModel]
@@ -304,6 +314,20 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
     }
 
+    public enum UpdateClipPath {
+      public struct Request: Sendable {
+        public let cardID: SRSCardModel.ID
+        public let clipRelativeFilePath: String
+        public init(cardID: SRSCardModel.ID, clipRelativeFilePath: String) {
+          self.cardID = cardID
+          self.clipRelativeFilePath = clipRelativeFilePath
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public init() {}
+      }
+    }
+
     public var create: @Sendable (Create.Request) async throws -> Create.Response
     public var delete: @Sendable (Delete.Request) async throws -> Delete.Response
     public var observeForSource: @Sendable (ObserveForSource.Request) async throws -> ObserveForSource.Response
@@ -312,6 +336,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
     public var fetchDueCards: @Sendable (FetchDueCards.Request) async throws -> FetchDueCards.Response
     public var updateFrontVideoVisibility: @Sendable (UpdateFrontVideoVisibility.Request) async throws -> UpdateFrontVideoVisibility.Response
     public var updatePlaybackSpeed: @Sendable (UpdatePlaybackSpeed.Request) async throws -> UpdatePlaybackSpeed.Response
+    public var updateClipPath: @Sendable (UpdateClipPath.Request) async throws -> UpdateClipPath.Response
 
     public enum PreviewNextIntervals {
       public struct Request: Sendable {
@@ -343,6 +368,29 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
 
     public var fetchTermLinksForCard: @Sendable (FetchTermLinksForCard.Request) async throws -> FetchTermLinksForCard.Response
 
+    public enum BatchUpdateCachedTranscripts {
+      public struct CardTranscriptData: Sendable {
+        public let cardID: SRSCardModel.ID
+        public let cachedTranscriptText: String
+        public let cachedEnglishTranslation: String
+        public init(cardID: SRSCardModel.ID, cachedTranscriptText: String, cachedEnglishTranslation: String) {
+          self.cardID = cardID
+          self.cachedTranscriptText = cachedTranscriptText
+          self.cachedEnglishTranslation = cachedEnglishTranslation
+        }
+      }
+      public struct Request: Sendable {
+        public let updates: [CardTranscriptData]
+        public init(updates: [CardTranscriptData]) { self.updates = updates }
+      }
+      public struct Response: Sendable, Equatable {
+        public let updatedCount: Int
+        public init(updatedCount: Int) { self.updatedCount = updatedCount }
+      }
+    }
+
+    public var batchUpdateCachedTranscripts: @Sendable (BatchUpdateCachedTranscripts.Request) async throws -> BatchUpdateCachedTranscripts.Response
+
     public init(
       create: @Sendable @escaping (Create.Request) async throws -> Create.Response,
       delete: @Sendable @escaping (Delete.Request) async throws -> Delete.Response,
@@ -352,8 +400,10 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       fetchDueCards: @Sendable @escaping (FetchDueCards.Request) async throws -> FetchDueCards.Response,
       updateFrontVideoVisibility: @Sendable @escaping (UpdateFrontVideoVisibility.Request) async throws -> UpdateFrontVideoVisibility.Response,
       updatePlaybackSpeed: @Sendable @escaping (UpdatePlaybackSpeed.Request) async throws -> UpdatePlaybackSpeed.Response,
+      updateClipPath: @Sendable @escaping (UpdateClipPath.Request) async throws -> UpdateClipPath.Response,
       previewNextIntervals: @Sendable @escaping (PreviewNextIntervals.Request) async throws -> PreviewNextIntervals.Response,
-      fetchTermLinksForCard: @Sendable @escaping (FetchTermLinksForCard.Request) async throws -> FetchTermLinksForCard.Response
+      fetchTermLinksForCard: @Sendable @escaping (FetchTermLinksForCard.Request) async throws -> FetchTermLinksForCard.Response,
+      batchUpdateCachedTranscripts: @Sendable @escaping (BatchUpdateCachedTranscripts.Request) async throws -> BatchUpdateCachedTranscripts.Response
     ) {
       self.create = create
       self.delete = delete
@@ -363,8 +413,10 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       self.fetchDueCards = fetchDueCards
       self.updateFrontVideoVisibility = updateFrontVideoVisibility
       self.updatePlaybackSpeed = updatePlaybackSpeed
+      self.updateClipPath = updateClipPath
       self.previewNextIntervals = previewNextIntervals
       self.fetchTermLinksForCard = fetchTermLinksForCard
+      self.batchUpdateCachedTranscripts = batchUpdateCachedTranscripts
     }
   }
   public var srsCard: SRSCard
@@ -652,13 +704,52 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
   }
   public var dailySnapshot: DailySnapshot
 
+  // MARK: - AppSettings
+
+  public struct AppSettings: Sendable {
+
+    public enum Fetch {
+      public struct Request: Sendable { public init() {} }
+      public struct Response: Sendable, Equatable {
+        public let model: AppSettingsModel
+        public init(model: AppSettingsModel) { self.model = model }
+      }
+    }
+
+    public enum Update {
+      public struct Request: Sendable {
+        public let model: AppSettingsModel
+        public init(model: AppSettingsModel) { self.model = model }
+      }
+      public struct Response: Sendable, Equatable {
+        public init() {}
+      }
+    }
+
+    public var fetch: @Sendable (Fetch.Request) async throws -> Fetch.Response
+    public var update: @Sendable (Update.Request) async throws -> Update.Response
+
+    public init(
+      fetch: @Sendable @escaping (Fetch.Request) async throws -> Fetch.Response,
+      update: @Sendable @escaping (Update.Request) async throws -> Update.Response
+    ) {
+      self.fetch = fetch
+      self.update = update
+    }
+  }
+  public var appSettings: AppSettings
+
+  public var close: @Sendable () throws -> Void
+
   public init(
     mediaSource: MediaSource,
     mediaSourceCardCandidate: MediaSourceCardCandidate,
     srsCard: SRSCard,
     japaneseTerm: JapaneseTerm,
     studySession: StudySession,
-    dailySnapshot: DailySnapshot
+    dailySnapshot: DailySnapshot,
+    appSettings: AppSettings,
+    close: @Sendable @escaping () throws -> Void
   ) {
     self.mediaSource = mediaSource
     self.mediaSourceCardCandidate = mediaSourceCardCandidate
@@ -666,5 +757,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
     self.japaneseTerm = japaneseTerm
     self.studySession = studySession
     self.dailySnapshot = dailySnapshot
+    self.appSettings = appSettings
+    self.close = close
   }
 }

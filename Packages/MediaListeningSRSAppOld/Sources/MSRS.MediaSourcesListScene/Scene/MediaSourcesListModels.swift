@@ -5,10 +5,12 @@ import MSRS_MediaSourceImportPickerScene
 import MSRS_ProcessingQueueScene
 import MSRS_SharedModels
 import MSRS_SRSCardReviewScene
+import SYNC_ElixirSyncClient
 
 public enum MediaSourcesListModels {
 
   public typealias Dependencies = HasMediaListeningSRSDatabaseClient
+                                & HasElixirSyncClient
                                 & MediaSourceImportPickerModels.Dependencies
                                 & ProcessingQueueModels.Dependencies
                                 & SRSCardReviewModels.Dependencies

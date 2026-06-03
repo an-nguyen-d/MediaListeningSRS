@@ -1,7 +1,9 @@
 import Foundation
 import JML_JMLDatabaseClient
 import JML_JMLSharedModels
+#if targetEnvironment(macCatalyst)
 import METG_METGDatabaseClient
+#endif
 import MSRS_MediaSourceImportService
 import MSRS_SharedModels
 
@@ -16,12 +18,16 @@ final class MediaSourceImportEpisodePickerInteractor: MediaSourceImportEpisodePi
   let presenter: MediaSourceImportEpisodePickerPresenter
   private let seriesID: TVShowSeriesModel.ID
   private let jmlDatabaseClient: JMLDatabaseClient
+  #if targetEnvironment(macCatalyst)
   private let metgDatabaseClient: METGDatabaseClient
+  #endif
   private let mediaSourceImportService: MediaSourceImportService
 
   private var allSections: [MediaSourceImportEpisodePickerModels.Section] = []
   private var searchText: String = ""
+  private var isImporting = false
 
+  #if targetEnvironment(macCatalyst)
   init(
     presenter: MediaSourceImportEpisodePickerPresenter,
     seriesID: TVShowSeriesModel.ID,
@@ -35,6 +41,19 @@ final class MediaSourceImportEpisodePickerInteractor: MediaSourceImportEpisodePi
     self.metgDatabaseClient = metgDatabaseClient
     self.mediaSourceImportService = mediaSourceImportService
   }
+  #else
+  init(
+    presenter: MediaSourceImportEpisodePickerPresenter,
+    seriesID: TVShowSeriesModel.ID,
+    jmlDatabaseClient: JMLDatabaseClient,
+    mediaSourceImportService: MediaSourceImportService
+  ) {
+    self.presenter = presenter
+    self.seriesID = seriesID
+    self.jmlDatabaseClient = jmlDatabaseClient
+    self.mediaSourceImportService = mediaSourceImportService
+  }
+  #endif
 
   func sendAction(_ action: MediaSourceImportEpisodePickerModels.Action) {
     switch action {
@@ -51,7 +70,7 @@ final class MediaSourceImportEpisodePickerInteractor: MediaSourceImportEpisodePi
   private func handleViewDidLoad() {
     presenter.presentState(.loading)
     let seriesID = self.seriesID
-    Task { [jmlDatabaseClient, metgDatabaseClient, presenter] in
+    Task { [jmlDatabaseClient, presenter] in
       do {
         let item = try await jmlDatabaseClient.tvShowSeries.fetchWithSeasons(
           .init(seriesID: seriesID, hierarchyLevel: .withEpisodes)
@@ -60,10 +79,14 @@ final class MediaSourceImportEpisodePickerInteractor: MediaSourceImportEpisodePi
         let allEpisodeFileIDs = item.seasons
           .flatMap(\.episodes)
           .compactMap(\.japaneseSubtitleFile?.id)
+        #if targetEnvironment(macCatalyst)
         let readyFileIDs = try await Self.fetchReadyFileIDs(
           fileIDs: allEpisodeFileIDs,
           metgDatabaseClient: metgDatabaseClient
         )
+        #else
+        let readyFileIDs = Set(allEpisodeFileIDs.map(\.rawValue))
+        #endif
 
         let sections = Self.buildSections(from: item, readyFileIDs: readyFileIDs)
         await MainActor.run {
@@ -79,12 +102,16 @@ final class MediaSourceImportEpisodePickerInteractor: MediaSourceImportEpisodePi
   }
 
   private func handleEpisodeTapped(_ ref: MediaSourceModel.JMLMediaReference) {
+    guard !isImporting else { return }
+    isImporting = true
+    presenter.presentImporting()
     Task { [mediaSourceImportService, presenter] in
       do {
         let response = try await mediaSourceImportService.import(
           .init(jmlMediaReference: ref)
         )
         await MainActor.run {
+          self.isImporting = false
           presenter.presentImportSucceeded(
             createdSourceID: response.createdMediaSource.id,
             candidateCount: response.createdCandidates.count
@@ -92,6 +119,7 @@ final class MediaSourceImportEpisodePickerInteractor: MediaSourceImportEpisodePi
         }
       } catch {
         await MainActor.run {
+          self.isImporting = false
           presenter.presentImportError("Import failed: \(error)")
         }
       }
@@ -146,6 +174,7 @@ final class MediaSourceImportEpisodePickerInteractor: MediaSourceImportEpisodePi
     return sections
   }
 
+  #if targetEnvironment(macCatalyst)
   private static func fetchReadyFileIDs(
     fileIDs: [LocalizedLocalFileModel.ID],
     metgDatabaseClient: METGDatabaseClient
@@ -162,4 +191,5 @@ final class MediaSourceImportEpisodePickerInteractor: MediaSourceImportEpisodePi
     }
     return readyIDs
   }
+  #endif
 }

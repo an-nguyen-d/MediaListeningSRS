@@ -60,7 +60,10 @@ public final class MediaSourcesListVC: UIViewController, MediaSourcesListDisplay
   }
 
   @objc private func settingsTapped() {
-    let settingsVC = SettingsVC()
+    let settingsVC = SettingsVC(
+      mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
+      elixirSyncClient: dependencies.elixirSyncClient
+    )
     navigationController?.pushViewController(settingsVC, animated: true)
   }
 
@@ -97,7 +100,9 @@ public final class MediaSourcesListVC: UIViewController, MediaSourcesListDisplay
 
   func displayNavigateToReviewAll() {
     let reviewVC = SRSCardReviewVC(dependencies: dependencies)
-    navigationController?.pushViewController(reviewVC, animated: true)
+    let nav = UINavigationController(rootViewController: reviewVC)
+    nav.modalPresentationStyle = .fullScreen
+    present(nav, animated: true)
   }
 
   func displayNavigateToProcessingQueue(mediaSourceID: MediaSourceModel.ID) {

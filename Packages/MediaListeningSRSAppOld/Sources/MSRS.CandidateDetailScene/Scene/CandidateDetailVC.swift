@@ -23,6 +23,7 @@ public final class CandidateDetailVC: UIViewController, CandidateDetailDisplayer
     dependencies: CandidateDetailModels.Dependencies
   ) {
     let presenter = CandidateDetailPresenter()
+    #if targetEnvironment(macCatalyst)
     self.interactor = CandidateDetailInteractor(
       presenter: presenter,
       candidateID: candidateID,
@@ -33,8 +34,23 @@ public final class CandidateDetailVC: UIViewController, CandidateDetailDisplayer
       dictionaryClient: dependencies.dictionaryClient,
       srtParserClient: dependencies.srtParserClient,
       clipExportService: dependencies.clipExportService,
+      clipStorageClient: dependencies.clipStorageClient,
       exportedClipsDirectoryURL: dependencies.exportedClipsDirectoryURL
     )
+    #else
+    self.interactor = CandidateDetailInteractor(
+      presenter: presenter,
+      candidateID: candidateID,
+      mediaSourceID: mediaSourceID,
+      mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
+      jmlDatabaseClient: dependencies.jmlDatabaseClient,
+      dictionaryClient: dependencies.dictionaryClient,
+      srtParserClient: dependencies.srtParserClient,
+      clipExportService: dependencies.clipExportService,
+      clipStorageClient: dependencies.clipStorageClient,
+      exportedClipsDirectoryURL: dependencies.exportedClipsDirectoryURL
+    )
+    #endif
     super.init(nibName: nil, bundle: nil)
     presenter.displayer = self
   }

@@ -25,7 +25,7 @@ extension MediaListeningSRSDatabaseClient {
             )
             try record.insert(db)
           }
-          let coverageThreshold = CandidateValidityFilterService.readCoverageThreshold()
+          let coverageThreshold = CandidateValidityFilterService.readCoverageThreshold(db: db)
           try CandidateValidityFilterService.cascadeAutoFilter(
             changedPairs: Set([TermInflectionPair(japaneseTermID: request.japaneseTermID, inflectionKey: "")]),
             coverageThreshold: coverageThreshold,

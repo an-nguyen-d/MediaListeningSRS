@@ -3,21 +3,35 @@ import ElixirShared
 import IYO_DictionaryClient
 import IYO_DictionaryUIKit
 import MSRS_ClipExportService
+import MSRS_ClipStorageClient
 import MSRS_MediaListeningSRSDatabaseClient
 import MSRS_Shared
 import MSRS_SharedModels
 import JML_JMLDatabaseClient
+#if targetEnvironment(macCatalyst)
 import METG_METGDatabaseClient
+#endif
 
 public enum CandidateDetailModels {
 
+  #if targetEnvironment(macCatalyst)
   public typealias Dependencies = HasClipExportService
+                                & HasClipStorageClient
                                 & HasDictionaryClient
                                 & HasExportedClipsDirectoryURL
                                 & HasJMLDatabaseClient
                                 & HasMediaListeningSRSDatabaseClient
                                 & HasMETGDatabaseClient
                                 & HasSRTParserClient
+  #else
+  public typealias Dependencies = HasClipExportService
+                                & HasClipStorageClient
+                                & HasDictionaryClient
+                                & HasExportedClipsDirectoryURL
+                                & HasJMLDatabaseClient
+                                & HasMediaListeningSRSDatabaseClient
+                                & HasSRTParserClient
+  #endif
 
   public enum Action {
     case viewDidLoad

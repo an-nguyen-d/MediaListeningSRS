@@ -17,7 +17,23 @@ public enum IYomiDictionaryViewModelBridge {
     from result: DictionaryLookupResult
   ) -> DictionaryLookupViewModel {
     let primarySpelling = result.spellings.first?.spelling ?? ""
+    let resultVM = makeResultViewModel(
+      from: result,
+      surfaceText: primarySpelling,
+      deinflectedText: primarySpelling,
+      inflections: [],
+      matchedTextLength: primarySpelling.utf16.count
+    )
+    return DictionaryLookupViewModel(results: [resultVM])
+  }
 
+  public static func makeResultViewModel(
+    from result: DictionaryLookupResult,
+    surfaceText: String,
+    deinflectedText: String,
+    inflections: [InflectionType],
+    matchedTextLength: Int
+  ) -> DictionaryLookupViewModel.ResultViewModel {
     let spellings = result.spellings.map { spelling in
       DictionaryLookupViewModel.SpellingViewModel(
         id: spelling.id,
@@ -35,20 +51,18 @@ public enum IYomiDictionaryViewModelBridge {
       )
     }
 
-    let resultVM = DictionaryLookupViewModel.ResultViewModel(
-      surfaceText: primarySpelling,
-      deinflectedText: primarySpelling,
+    return DictionaryLookupViewModel.ResultViewModel(
+      surfaceText: surfaceText,
+      deinflectedText: deinflectedText,
       furiganaComponents: [] as [JapaneseTextClient.ParseFurigana.Response.FuriganaComponent],
       furiganaText: nil,
       spellings: spellings,
       senses: senses,
       highlightRange: nil,
-      inflections: [] as [InflectionType],
+      inflections: inflections,
       dictionaryID: Int(result.termID.rawValue),
       frequencyRank: result.frequencyRank,
-      matchedTextLength: primarySpelling.utf16.count
+      matchedTextLength: matchedTextLength
     )
-
-    return DictionaryLookupViewModel(results: [resultVM])
   }
 }

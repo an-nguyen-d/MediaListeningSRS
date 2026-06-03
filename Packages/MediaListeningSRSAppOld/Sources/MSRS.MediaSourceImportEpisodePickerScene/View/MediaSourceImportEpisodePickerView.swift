@@ -9,6 +9,9 @@ final class MediaSourceImportEpisodePickerView: UIView {
   private let activityIndicator = UIActivityIndicatorView(style: .large)
   private let loadingLabel = UILabel()
   private let messageLabel = UILabel()
+  private let importingOverlay = UIView()
+  private let importingSpinner = UIActivityIndicatorView(style: .large)
+  private let importingLabel = UILabel()
   private var sections: [MediaSourceImportEpisodePickerModels.Section] = []
 
   override init(frame: CGRect) {
@@ -47,6 +50,20 @@ final class MediaSourceImportEpisodePickerView: UIView {
     messageLabel.translatesAutoresizingMaskIntoConstraints = false
     addSubview(messageLabel)
 
+    importingOverlay.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.85)
+    importingOverlay.isHidden = true
+    importingOverlay.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(importingOverlay)
+
+    importingSpinner.translatesAutoresizingMaskIntoConstraints = false
+    importingOverlay.addSubview(importingSpinner)
+
+    importingLabel.text = "Importing…"
+    importingLabel.textColor = .label
+    importingLabel.font = .preferredFont(forTextStyle: .headline)
+    importingLabel.translatesAutoresizingMaskIntoConstraints = false
+    importingOverlay.addSubview(importingLabel)
+
     NSLayoutConstraint.activate([
       tableView.topAnchor.constraint(equalTo: topAnchor),
       tableView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -65,7 +82,26 @@ final class MediaSourceImportEpisodePickerView: UIView {
       messageLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
       messageLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 40),
       messageLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -40),
+
+      importingOverlay.topAnchor.constraint(equalTo: topAnchor),
+      importingOverlay.leadingAnchor.constraint(equalTo: leadingAnchor),
+      importingOverlay.trailingAnchor.constraint(equalTo: trailingAnchor),
+      importingOverlay.bottomAnchor.constraint(equalTo: bottomAnchor),
+      importingSpinner.centerXAnchor.constraint(equalTo: importingOverlay.centerXAnchor),
+      importingSpinner.centerYAnchor.constraint(equalTo: importingOverlay.centerYAnchor, constant: -16),
+      importingLabel.centerXAnchor.constraint(equalTo: importingOverlay.centerXAnchor),
+      importingLabel.topAnchor.constraint(equalTo: importingSpinner.bottomAnchor, constant: 12),
     ])
+  }
+
+  func setImporting(_ importing: Bool) {
+    importingOverlay.isHidden = !importing
+    if importing {
+      importingSpinner.startAnimating()
+    } else {
+      importingSpinner.stopAnimating()
+    }
+    tableView.isUserInteractionEnabled = !importing
   }
 
   func setState(_ state: MediaSourceImportEpisodePickerModels.DisplayState) {

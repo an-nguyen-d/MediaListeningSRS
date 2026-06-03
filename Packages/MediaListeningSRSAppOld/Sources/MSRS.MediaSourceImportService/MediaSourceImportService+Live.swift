@@ -102,10 +102,7 @@ extension MediaSourceImportService {
 
         // 5. Filter out segments where every tagged pair is invalid (known OR coverage >= threshold).
         let allPairs = Array(Set(termPairsByIndex.values.flatMap { $0 }))
-        let coverageThresholdValue = UserDefaults.standard.integer(
-          forKey: "MSRS.Settings.minimumCardCoverageCount"
-        )
-        let effectiveCoverageThreshold = coverageThresholdValue > 0 ? coverageThresholdValue : 50
+        let effectiveCoverageThreshold = MSRSAppSettings.minimumCardCoverageCount
         let invalidResponse = try await mediaListeningSRSDatabaseClient.japaneseTerm
           .fetchInvalidTermPairs(.init(
             termPairs: allPairs,

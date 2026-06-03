@@ -12,6 +12,8 @@ final class SRSCardReviewView: UIView {
   var onFrontVideoVisibilityChanged: ((SRSCardModel.FrontVideoVisibility) -> Void)?
   var onPlaybackSpeedChanged: ((Double) -> Void)?
   var onSubmitTypedAnswer: ((String) -> Void)?
+  var onTranscriptTappedAtCharacterIndex: ((Int) -> Void)?
+  var onAutoLoopVideoChanged: ((Bool) -> Void)?
 
   // MARK: - Common
 
@@ -85,6 +87,8 @@ final class SRSCardReviewView: UIView {
   private var currentClipStartTime: TimeInterval = 0
   private var currentClipEndTime: TimeInterval = 0
   private var endObserver: Any?
+  private var boundaryObserver: Any?
+  private var didPlayToEndObserver: NSObjectProtocol?
   private var thumbnailTask: Task<Void, Never>?
   private var currentThumbnailFileURL: URL?
   private var currentVideoFileURL: URL?
@@ -166,9 +170,13 @@ final class SRSCardReviewView: UIView {
       blackMaskView.leadingAnchor.constraint(equalTo: videoStageView.leadingAnchor),
       blackMaskView.trailingAnchor.constraint(equalTo: videoStageView.trailingAnchor),
       blackMaskView.bottomAnchor.constraint(equalTo: videoStageView.bottomAnchor),
-
-      videoStageView.heightAnchor.constraint(equalToConstant: 360),
     ])
+
+    #if targetEnvironment(macCatalyst)
+    videoStageView.heightAnchor.constraint(equalToConstant: 360).isActive = true
+    #else
+    videoStageView.widthAnchor.constraint(equalTo: videoStageView.heightAnchor, multiplier: 16.0 / 9.0).isActive = true
+    #endif
   }
 
   private func setUpSpeedControls() {
@@ -224,6 +232,9 @@ final class SRSCardReviewView: UIView {
     guard newSpeed != playbackSpeed else { return }
     playbackSpeed = newSpeed
     updateSpeedLabels()
+    if isVideoPlaying {
+      player?.rate = Float(newSpeed)
+    }
     onPlaybackSpeedChanged?(newSpeed)
   }
 
@@ -246,8 +257,10 @@ final class SRSCardReviewView: UIView {
   }
 
   private func handleLoopToggle() {
-    MSRSAppSettings.autoLoopVideo.toggle()
+    let newValue = !MSRSAppSettings.autoLoopVideo
+    MSRSAppSettings.autoLoopVideo = newValue
     updateLoopButtons()
+    onAutoLoopVideoChanged?(newValue)
   }
 
   private func updateLoopButtons() {
@@ -292,14 +305,21 @@ final class SRSCardReviewView: UIView {
 
     Self.styleAction(frontShowBackButton, title: "Show Back", hotkey: "Return", backgroundColor: .systemIndigo)
     frontShowBackButton.addTarget(self, action: #selector(handleFrontRevealBackTap), for: .touchUpInside)
+    if MSRSDeviceType.current == .iPad {
+      frontShowBackButton.heightAnchor.constraint(equalToConstant: 120).isActive = true
+    }
 
+    #if targetEnvironment(macCatalyst)
     Self.styleAction(frontTypeAnswerButton, title: "Type Answer", hotkey: "", backgroundColor: .systemOrange)
     frontTypeAnswerButton.addTarget(self, action: #selector(handleTypeAnswerTap), for: .touchUpInside)
+    #endif
 
     frontBottomRow.axis = .vertical
     frontBottomRow.spacing = 12
     frontBottomRow.translatesAutoresizingMaskIntoConstraints = false
+    #if targetEnvironment(macCatalyst)
     frontBottomRow.addArrangedSubview(frontTypeAnswerButton)
+    #endif
     frontBottomRow.addArrangedSubview(frontShowBackButton)
 
     frontAnswerTextField.placeholder = "Type what you understood…"
@@ -345,9 +365,16 @@ final class SRSCardReviewView: UIView {
   private func setUpBack() {
     backContainer.translatesAutoresizingMaskIntoConstraints = false
 
+    #if targetEnvironment(macCatalyst)
     backTranscriptView.transcriptFont = .systemFont(ofSize: 56, weight: .regular)
+    #else
+    backTranscriptView.transcriptFont = .systemFont(ofSize: 28, weight: .regular)
+    #endif
     backTranscriptView.onTermTapped = { [weak self] termID in
       self?.onTermTapped?(termID)
+    }
+    backTranscriptView.onCharacterTapped = { [weak self] charIndex in
+      self?.onTranscriptTappedAtCharacterIndex?(charIndex)
     }
     backTranscriptView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -371,6 +398,10 @@ final class SRSCardReviewView: UIView {
     backFailButton.addTarget(self, action: #selector(handleFailTap), for: .touchUpInside)
     Self.styleAction(backPassButton, title: "Pass", hotkey: "2", backgroundColor: .systemGreen)
     backPassButton.addTarget(self, action: #selector(handlePassTap), for: .touchUpInside)
+    if MSRSDeviceType.current == .iPad {
+      backFailButton.heightAnchor.constraint(equalToConstant: 120).isActive = true
+      backPassButton.heightAnchor.constraint(equalToConstant: 120).isActive = true
+    }
   }
 
   private func setUpLLMResult() {
@@ -558,6 +589,10 @@ final class SRSCardReviewView: UIView {
 
   func boundingFrameForTermID(_ termID: Int64, in containerView: UIView) -> CGRect? {
     backTranscriptView.boundingFrameForTermID(termID, in: containerView)
+  }
+
+  func boundingFrameForCharacterRange(_ range: NSRange, in containerView: UIView) -> CGRect? {
+    backTranscriptView.boundingFrameForCharacterRange(range, in: containerView)
   }
 
   func setSelectedTermID(_ termID: Int64?) {
@@ -833,8 +868,10 @@ final class SRSCardReviewView: UIView {
 
   private func installEndObserver() {
     removeEndObserver()
+    guard let player else { return }
+
     let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
-    endObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
+    endObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
       Task { @MainActor [weak self] in
         guard let self, self.isVideoPlaying, let player = self.player else { return }
         let currentSeconds = CMTimeGetSeconds(player.currentTime())
@@ -842,26 +879,41 @@ final class SRSCardReviewView: UIView {
         if duration > 0 {
           self.clipProgressBar.setProgress((currentSeconds - self.currentClipStartTime) / duration)
         }
-        let endCMTime = CMTime(seconds: self.currentClipEndTime, preferredTimescale: 600)
-        if CMTimeCompare(player.currentTime(), endCMTime) >= 0 {
-          self.clipProgressBar.setProgress(1)
-          if MSRSAppSettings.autoLoopVideo {
-            player.pause()
-            self.isVideoPlaying = false
-            self.removeEndObserver()
-            let workItem = DispatchWorkItem { [weak self] in
-              self?.playFromStart()
-            }
-            self.autoLoopWorkItem = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
-          } else {
-            player.pause()
-            self.isVideoPlaying = false
-            self.removeEndObserver()
-            self.applyVideoStageVisibility()
-          }
-        }
       }
+    }
+
+    let endCMTime = CMTime(seconds: currentClipEndTime, preferredTimescale: 600)
+    boundaryObserver = player.addBoundaryTimeObserver(forTimes: [NSValue(time: endCMTime)], queue: .main) { [weak self] in
+      Task { @MainActor [weak self] in
+        self?.handleClipReachedEnd()
+      }
+    }
+
+    didPlayToEndObserver = NotificationCenter.default.addObserver(
+      forName: .AVPlayerItemDidPlayToEndTime,
+      object: player.currentItem,
+      queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.handleClipReachedEnd()
+      }
+    }
+  }
+
+  private func handleClipReachedEnd() {
+    guard isVideoPlaying else { return }
+    clipProgressBar.setProgress(1)
+    player?.pause()
+    isVideoPlaying = false
+    removeEndObserver()
+    if MSRSAppSettings.autoLoopVideo {
+      let workItem = DispatchWorkItem { [weak self] in
+        self?.playFromStart()
+      }
+      autoLoopWorkItem = workItem
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+    } else {
+      applyVideoStageVisibility()
     }
   }
 
@@ -869,6 +921,14 @@ final class SRSCardReviewView: UIView {
     if let observer = endObserver {
       player?.removeTimeObserver(observer)
       endObserver = nil
+    }
+    if let observer = boundaryObserver {
+      player?.removeTimeObserver(observer)
+      boundaryObserver = nil
+    }
+    if let observer = didPlayToEndObserver {
+      NotificationCenter.default.removeObserver(observer)
+      didPlayToEndObserver = nil
     }
   }
 
@@ -1002,9 +1062,11 @@ final class SRSCardReviewView: UIView {
   ) {
     var config = UIButton.Configuration.filled()
     config.title = title
+    #if targetEnvironment(macCatalyst)
     if !hotkey.isEmpty {
       config.subtitle = "(\(hotkey))"
     }
+    #endif
     config.baseBackgroundColor = backgroundColor
     config.baseForegroundColor = .white
     config.cornerStyle = .medium

@@ -1,28 +1,35 @@
 import Foundation
 import ElixirShared
 import MSRS_ClipExportService
+import MSRS_ClipStorageClient
 import MSRS_FSRS
 import MSRS_MediaListeningSRSDatabaseClient
 import MSRS_MediaListeningSRSDatabaseClientGRDB
 import MSRS_MediaSourceImportService
 import MSRS_Shared
 import JML_JMLDatabaseClient
-import JML_JMLDatabaseClientGRDB
-import METG_METGDatabaseClient
-import METG_METGDatabaseClientGRDB
 import IYO_DictionaryClient
 import IYO_JapaneseParserClient
+import SYNC_ElixirSyncClient
+import SYNC_ElixirSyncClientFirebase
+
+import JML_JMLDatabaseClientGRDB
+#if targetEnvironment(macCatalyst)
+import METG_METGDatabaseClient
+import METG_METGDatabaseClientGRDB
 import NYAN_SharedAnimeClipDatabase
+#endif
 
 public struct AppDependencies:
   HasClipExportService,
+  HasClipStorageClient,
   HasDictionaryClient,
   HasExportedClipsDirectoryURL,
+  HasElixirSyncClient,
   HasJMLDatabaseClient,
   HasMediaListeningSRSDatabaseClient,
   HasMediaSourceImportService,
   HasJapaneseParserClient,
-  HasMETGDatabaseClient,
   HasSRTParserClient
 {
 
@@ -31,17 +38,22 @@ public struct AppDependencies:
   public let clipExportService: ClipExportService
   public let japaneseParserClient: JapaneseParserClient
   public let srtParserClient: SRTParserClient
+  public let elixirSyncClient: ElixirSyncClient
 
   public let jmlDatabaseClient: JMLDatabaseClient
+  #if targetEnvironment(macCatalyst)
   public let metgDatabaseClient: METGDatabaseClient
+  #endif
   public let dictionaryClient: DictionaryClient
 
+  public let clipStorageClient: ClipStorageClient
   public let exportedClipsDirectoryURL: URL
 
   public init() {
+    ElixirSyncFirebaseSetup.configureIfNeeded()
+
     let appDataDirectoryURL = Self.createAndReturnAppDataDirectoryURL()
-    let databaseFileURL = appDataDirectoryURL
-      .appendingPathComponent("database.sqlite", isDirectory: false)
+    let databaseFileURL = Self.databaseFileURL()
     self.exportedClipsDirectoryURL = Self.exportedClipsDirectoryURL()
 
     self.mediaListeningSRSDatabaseClient = .grdbValue(
@@ -49,6 +61,17 @@ public struct AppDependencies:
       fsrsParameters: FSRSParameters()
     )
 
+    self.elixirSyncClient = .firebaseValue(
+      localDatabaseFileURL: databaseFileURL,
+      firestoreDocumentPath: "sync/medialisteningsrs",
+      storageFilePath: "sync/medialisteningsrs/database.sqlite"
+    )
+
+    self.srtParserClient = .liveValue()
+    self.clipExportService = .avFoundationValue()
+    self.clipStorageClient = .firebaseValue()
+
+    #if targetEnvironment(macCatalyst)
     self.dictionaryClient = .sqliteValue(
       databasePath: NyanimeDBConstants.dictionaryDatabasePath
     )
@@ -63,8 +86,6 @@ public struct AppDependencies:
       dictionaryClient: self.dictionaryClient
     )
 
-    self.srtParserClient = .liveValue()
-
     self.japaneseParserClient = .liveValue(
       dictionaryClient: self.dictionaryClient
     )
@@ -76,8 +97,21 @@ public struct AppDependencies:
       srtParserClient: self.srtParserClient,
       japaneseParserClient: self.japaneseParserClient
     )
-
-    self.clipExportService = .avFoundationValue()
+    #else
+    let bundledDictionaryPath = Bundle.module.path(forResource: "dictionary", ofType: "sqlite")!
+    self.dictionaryClient = .sqliteValue(databasePath: bundledDictionaryPath)
+    self.jmlDatabaseClient = .grdbValue(configuration: .inMemory)
+    self.japaneseParserClient = .liveValue(
+      dictionaryClient: self.dictionaryClient
+    )
+    self.mediaSourceImportService = .init(import: { _ in
+      throw NSError(
+        domain: "MediaSourceImportService",
+        code: 0,
+        userInfo: [NSLocalizedDescriptionKey: "Media import is not available on this device"]
+      )
+    })
+    #endif
   }
 
   // MARK: - App data directory
@@ -94,6 +128,11 @@ public struct AppDependencies:
       fatalError("AppDependencies: could not locate the user's Documents directory")
     }
     return documentsURL.appendingPathComponent(appDataDirectoryName, isDirectory: true)
+  }
+
+  public static func databaseFileURL() -> URL {
+    return appDataDirectoryURL()
+      .appendingPathComponent("database.sqlite", isDirectory: false)
   }
 
   public static func exportedClipsDirectoryURL() -> URL {
@@ -115,3 +154,7 @@ public struct AppDependencies:
   }
 
 }
+
+#if targetEnvironment(macCatalyst)
+extension AppDependencies: HasMETGDatabaseClient {}
+#endif

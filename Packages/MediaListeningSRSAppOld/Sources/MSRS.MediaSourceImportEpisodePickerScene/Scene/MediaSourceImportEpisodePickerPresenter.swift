@@ -4,6 +4,7 @@ import MSRS_SharedModels
 @MainActor
 protocol MediaSourceImportEpisodePickerDisplayer: AnyObject {
   func displayState(_ state: MediaSourceImportEpisodePickerModels.DisplayState)
+  func displayImporting()
   func displayImportError(_ message: String)
   func displayImportSucceeded(createdSourceID: MediaSourceModel.ID, candidateCount: Int)
 }
@@ -15,6 +16,10 @@ final class MediaSourceImportEpisodePickerPresenter {
 
   func presentState(_ state: MediaSourceImportEpisodePickerModels.DisplayState) {
     displayer?.displayState(state)
+  }
+
+  func presentImporting() {
+    displayer?.displayImporting()
   }
 
   func presentImportError(_ message: String) {

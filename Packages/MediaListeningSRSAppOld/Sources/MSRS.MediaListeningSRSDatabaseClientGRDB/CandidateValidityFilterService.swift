@@ -5,12 +5,13 @@ import MSRS_SharedModels
 
 internal enum CandidateValidityFilterService {
 
-  private static let coverageThresholdUserDefaultsKey = "MSRS.Settings.minimumCardCoverageCount"
   private static let coverageThresholdDefault = 50
 
-  static func readCoverageThreshold() -> Int {
-    let value = UserDefaults.standard.integer(forKey: coverageThresholdUserDefaultsKey)
-    return value > 0 ? value : coverageThresholdDefault
+  static func readCoverageThreshold(db: Database) -> Int {
+    guard let record = try? AppSettingsRecord.fetchOne(db) else {
+      return coverageThresholdDefault
+    }
+    return max(1, record.minimumCardCoverageCount)
   }
 
   static func computeInvalidTermPairs(

@@ -1,13 +1,19 @@
 import Foundation
 import JML_JMLDatabaseClient
 import JML_JMLSharedModels
+#if targetEnvironment(macCatalyst)
 import METG_METGDatabaseClient
+#endif
 import MSRS_MediaSourceImportService
 import MSRS_SharedModels
 
 public enum MediaSourceImportEpisodePickerModels {
 
+  #if targetEnvironment(macCatalyst)
   public typealias Dependencies = HasJMLDatabaseClient & HasMETGDatabaseClient & HasMediaSourceImportService
+  #else
+  public typealias Dependencies = HasJMLDatabaseClient & HasMediaSourceImportService
+  #endif
 
   public enum Action {
     case viewDidLoad

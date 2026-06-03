@@ -1,7 +1,9 @@
 import Foundation
 import JML_JMLDatabaseClient
 import JML_JMLSharedModels
+#if targetEnvironment(macCatalyst)
 import METG_METGDatabaseClient
+#endif
 import MSRS_MediaSourceImportService
 import MSRS_SharedModels
 
@@ -15,12 +17,15 @@ final class MediaSourceImportPickerInteractor: MediaSourceImportPickerInteractor
 
   let presenter: MediaSourceImportPickerPresenter
   private let jmlDatabaseClient: JMLDatabaseClient
+  #if targetEnvironment(macCatalyst)
   private let metgDatabaseClient: METGDatabaseClient
+  #endif
   private let mediaSourceImportService: MediaSourceImportService
 
   private var allRows: [MediaSourceImportPickerModels.Row] = []
   private var searchText: String = ""
 
+  #if targetEnvironment(macCatalyst)
   init(
     presenter: MediaSourceImportPickerPresenter,
     jmlDatabaseClient: JMLDatabaseClient,
@@ -32,6 +37,17 @@ final class MediaSourceImportPickerInteractor: MediaSourceImportPickerInteractor
     self.metgDatabaseClient = metgDatabaseClient
     self.mediaSourceImportService = mediaSourceImportService
   }
+  #else
+  init(
+    presenter: MediaSourceImportPickerPresenter,
+    jmlDatabaseClient: JMLDatabaseClient,
+    mediaSourceImportService: MediaSourceImportService
+  ) {
+    self.presenter = presenter
+    self.jmlDatabaseClient = jmlDatabaseClient
+    self.mediaSourceImportService = mediaSourceImportService
+  }
+  #endif
 
   func sendAction(_ action: MediaSourceImportPickerModels.Action) {
     switch action {
@@ -49,13 +65,17 @@ final class MediaSourceImportPickerInteractor: MediaSourceImportPickerInteractor
 
   private func handleViewDidLoad() {
     presenter.presentState(.loading)
-    Task { [metgDatabaseClient, jmlDatabaseClient, presenter] in
+    Task { [jmlDatabaseClient, presenter] in
       do {
+        #if targetEnvironment(macCatalyst)
         let allSubtitles = try await metgDatabaseClient.mediaSubtitles.fetchAll(.init())
 
         let readyFileIDs: [LocalizedLocalFileModel.ID] = allSubtitles.subtitles
           .filter { $0.hasFinishedLabelling && $0.hasCheckedSubtitleTimings }
           .map { LocalizedLocalFileModel.ID($0.localizedLocalFileId) }
+        #else
+        let readyFileIDs: [LocalizedLocalFileModel.ID] = []
+        #endif
 
         guard !readyFileIDs.isEmpty else {
           await MainActor.run {

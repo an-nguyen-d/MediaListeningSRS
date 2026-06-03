@@ -12,9 +12,12 @@ public final class StudyStatsVC: UIViewController {
   private var todayDuration: TimeInterval = 0
   private var todayCards: Int = 0
   private var todaySessions: Int = 0
+  private var last7DaysData: [DailyCardBarChartView.DayData] = []
   private var recentSessions: [StudySessionModel] = []
   private var latestSnapshot: DailyAggregateSnapshotModel?
   private var recentSnapshots: [DailyAggregateSnapshotModel] = []
+
+  private let barChartView = DailyCardBarChartView()
 
   public init(dependencies: Dependencies) {
     self.dbClient = dependencies.mediaListeningSRSDatabaseClient
@@ -55,9 +58,11 @@ public final class StudyStatsVC: UIViewController {
     let startOfToday = calendar.startOfDay(for: now)
     let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday)!
 
+    let sevenDaysAgo = calendar.date(byAdding: .day, value: -6, to: startOfToday)!
     let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: startOfToday)!
 
     let snapshotDateFormatter = Self.snapshotDateFormatter
+    let dayOfWeekFormatter = Self.dayOfWeekFormatter
 
     Task { [dbClient] in
       do {
@@ -74,6 +79,20 @@ public final class StudyStatsVC: UIViewController {
           .init(startDate: thirtyDaysAgoString, endDate: todayDateString)
         )
 
+        let recentModels = recentResponse.models
+        var dailyCounts: [Date: Int] = [:]
+        for session in recentModels {
+          let dayStart = calendar.startOfDay(for: session.startedAt)
+          dailyCounts[dayStart, default: 0] += session.cardsReviewed
+        }
+        var chartData: [DailyCardBarChartView.DayData] = []
+        for offset in 0..<7 {
+          let day = calendar.date(byAdding: .day, value: offset, to: sevenDaysAgo)!
+          let label = dayOfWeekFormatter.string(from: day)
+          let count = dailyCounts[day] ?? 0
+          chartData.append(.init(label: label, count: count))
+        }
+
         await MainActor.run {
           self.todayDuration = todayResponse.models.reduce(0) {
             $0 + $1.endedAt.timeIntervalSince($1.startedAt)
@@ -81,7 +100,10 @@ public final class StudyStatsVC: UIViewController {
           self.todayCards = todayResponse.models.reduce(0) { $0 + $1.cardsReviewed }
           self.todaySessions = todayResponse.models.count
 
-          self.recentSessions = recentResponse.models.reversed()
+          self.last7DaysData = chartData
+          self.barChartView.setData(chartData)
+
+          self.recentSessions = recentModels.reversed()
 
           let snapshots = snapshotsResponse.models
           self.latestSnapshot = snapshots.last
@@ -129,18 +151,25 @@ public final class StudyStatsVC: UIViewController {
     f.locale = Locale(identifier: "en_US_POSIX")
     return f
   }()
+
+  private static let dayOfWeekFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.dateFormat = "EEE"
+    return f
+  }()
 }
 
 extension StudyStatsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 4 }
+  public func numberOfSections(in tableView: UITableView) -> Int { 5 }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     switch section {
     case 0: return 3
-    case 1: return max(recentSessions.count, 1)
-    case 2: return latestSnapshot != nil ? 5 : 1
-    case 3: return max(recentSnapshots.count, 1)
+    case 1: return 1
+    case 2: return max(recentSessions.count, 1)
+    case 3: return latestSnapshot != nil ? 5 : 1
+    case 4: return max(recentSnapshots.count, 1)
     default: return 0
     }
   }
@@ -148,9 +177,10 @@ extension StudyStatsVC: UITableViewDataSource {
   public func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
     switch section {
     case 0: return "Today"
-    case 1: return "Recent Sessions (30 days)"
-    case 2: return "Deck Snapshot (Latest)"
-    case 3: return "Snapshot History (30 days)"
+    case 1: return "Cards Reviewed (Last 7 Days)"
+    case 2: return "Recent Sessions (30 days)"
+    case 3: return "Deck Snapshot (Latest)"
+    case 4: return "Snapshot History (30 days)"
     default: return nil
     }
   }
@@ -176,6 +206,21 @@ extension StudyStatsVC: UITableViewDataSource {
       return cell
 
     case 1:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      barChartView.removeFromSuperview()
+      barChartView.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(barChartView)
+      NSLayoutConstraint.activate([
+        barChartView.topAnchor.constraint(equalTo: cell.contentView.topAnchor),
+        barChartView.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 8),
+        barChartView.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -8),
+        barChartView.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor),
+        barChartView.heightAnchor.constraint(equalToConstant: 200),
+      ])
+      return cell
+
+    case 2:
       if recentSessions.isEmpty {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No study sessions yet"
@@ -196,7 +241,7 @@ extension StudyStatsVC: UITableViewDataSource {
       cell.detailTextLabel?.textColor = .secondaryLabel
       return cell
 
-    case 2:
+    case 3:
       guard let snapshot = latestSnapshot else {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No snapshots yet"
@@ -229,7 +274,7 @@ extension StudyStatsVC: UITableViewDataSource {
       }
       return cell
 
-    case 3:
+    case 4:
       if recentSnapshots.isEmpty {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No snapshots yet"

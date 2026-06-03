@@ -24,7 +24,9 @@ extension MediaListeningSRSDatabaseClient {
             subtitleIndexEnd: request.subtitleIndexEnd,
             clipStartTimeSeconds: request.clipStartTimeSeconds,
             clipEndTimeSeconds: request.clipEndTimeSeconds,
-            clipRelativeFilePath: request.clipRelativeFilePath
+            clipRelativeFilePath: request.clipRelativeFilePath,
+            cachedTranscriptText: request.cachedTranscriptText,
+            cachedEnglishTranslation: request.cachedEnglishTranslation
           )
           try record.insert(db)
           guard let cardID = record.id else {
@@ -62,7 +64,7 @@ extension MediaListeningSRSDatabaseClient {
             """, arguments: [link.japaneseTermID, link.inflectionKey])
           }
 
-          let coverageThreshold = CandidateValidityFilterService.readCoverageThreshold()
+          let coverageThreshold = CandidateValidityFilterService.readCoverageThreshold(db: db)
           try CandidateValidityFilterService.cascadeAutoFilter(
             changedPairs: uniqueLinks,
             coverageThreshold: coverageThreshold,
@@ -170,16 +172,9 @@ extension MediaListeningSRSDatabaseClient {
             lastReview: record.lastReviewDate
           )
 
-          var reviewParameters = fsrsParameters
-          if let userRetention = UserDefaults.standard.object(forKey: "MSRS.Settings.desiredRetention") as? Double {
-            reviewParameters = FSRSParameters(
-              requestRetention: userRetention,
-              maximumInterval: fsrsParameters.maximumInterval,
-              w: fsrsParameters.w,
-              enableFuzz: fsrsParameters.enableFuzz,
-              enableShortTerm: fsrsParameters.enableShortTerm
-            )
-          }
+          let reviewParameters = Self.fsrsParametersWithDBRetention(
+            base: fsrsParameters, db: db
+          )
           let fsrs = FSRS(parameters: reviewParameters)
           let result = try fsrs.next(card: currentCard, now: now, grade: rating)
           let updatedFSRSCard = result.card
@@ -220,14 +215,21 @@ extension MediaListeningSRSDatabaseClient {
       },
       fetchDueCards: { request in
         try await databaseWriter.read { db in
-          let records = try SRSCardRecord.fetchAll(db, sql: """
+          let baseSql = """
             SELECT * FROM srsCardRecord
-            WHERE dueDate IS NULL OR dueDate <= ?
+            WHERE clipRelativeFilePath != ''
+              AND (dueDate IS NULL OR dueDate <= ?)
             ORDER BY
               CASE WHEN dueDate IS NOT NULL THEN 0 ELSE 1 END,
               CASE WHEN dueDate IS NOT NULL THEN dueDate END ASC,
               createdAt ASC
-          """, arguments: [request.asOf])
+          """
+          let records: [SRSCardRecord]
+          if let limit = request.limit {
+            records = try SRSCardRecord.fetchAll(db, sql: baseSql + "\nLIMIT ?", arguments: [request.asOf, limit])
+          } else {
+            records = try SRSCardRecord.fetchAll(db, sql: baseSql, arguments: [request.asOf])
+          }
           return .init(cards: records.map { GRDBMapper.SRSCard.mapToModel(from: $0) })
         }
       },
@@ -254,6 +256,17 @@ extension MediaListeningSRSDatabaseClient {
           return .init()
         }
       },
+      updateClipPath: { request in
+        try await databaseWriter.write { db in
+          guard var record = try SRSCardRecord.fetchOne(db, key: request.cardID.rawValue) else {
+            throw MediaListeningSRSDatabaseError.recordNotFound(id: request.cardID.rawValue)
+          }
+          record.clipRelativeFilePath = request.clipRelativeFilePath
+          record.lastUpdatedAt = Date()
+          try record.update(db)
+          return .init()
+        }
+      },
       previewNextIntervals: { request in
         try await databaseWriter.read { db in
           guard let record = try SRSCardRecord.fetchOne(db, key: request.cardID.rawValue) else {
@@ -273,16 +286,9 @@ extension MediaListeningSRSDatabaseClient {
             lastReview: record.lastReviewDate
           )
 
-          var reviewParameters = fsrsParameters
-          if let userRetention = UserDefaults.standard.object(forKey: "MSRS.Settings.desiredRetention") as? Double {
-            reviewParameters = FSRSParameters(
-              requestRetention: userRetention,
-              maximumInterval: fsrsParameters.maximumInterval,
-              w: fsrsParameters.w,
-              enableFuzz: fsrsParameters.enableFuzz,
-              enableShortTerm: fsrsParameters.enableShortTerm
-            )
-          }
+          let reviewParameters = Self.fsrsParametersWithDBRetention(
+            base: fsrsParameters, db: db
+          )
           let fsrs = FSRS(parameters: reviewParameters)
           let preview = fsrs.repeat(card: currentCard, now: now)
 
@@ -309,7 +315,42 @@ extension MediaListeningSRSDatabaseClient {
           }
           return .init(termLinks: links)
         }
+      },
+      batchUpdateCachedTranscripts: { request in
+        try await databaseWriter.write { db in
+          var count = 0
+          for update in request.updates {
+            let rowsUpdated = try db.execute(sql: """
+              UPDATE srsCardRecord
+              SET cachedTranscriptText = ?, cachedEnglishTranslation = ?, lastUpdatedAt = ?
+              WHERE id = ?
+            """, arguments: [
+              update.cachedTranscriptText,
+              update.cachedEnglishTranslation,
+              Date(),
+              update.cardID.rawValue
+            ])
+            count += db.changesCount
+          }
+          return .init(updatedCount: count)
+        }
       }
+    )
+  }
+
+  private static func fsrsParametersWithDBRetention(
+    base: FSRSParameters, db: Database
+  ) -> FSRSParameters {
+    guard let record = try? AppSettingsRecord.fetchOne(db),
+          record.desiredRetention != base.requestRetention else {
+      return base
+    }
+    return FSRSParameters(
+      requestRetention: record.desiredRetention,
+      maximumInterval: base.maximumInterval,
+      w: base.w,
+      enableFuzz: base.enableFuzz,
+      enableShortTerm: base.enableShortTerm
     )
   }
 }
