@@ -13,11 +13,13 @@ public final class StudyStatsVC: UIViewController {
   private var todayCards: Int = 0
   private var todaySessions: Int = 0
   private var last7DaysData: [DailyCardBarChartView.DayData] = []
+  private var last7DaysTimeData: [DailyTimeBarChartView.DayData] = []
   private var recentSessions: [StudySessionModel] = []
   private var latestSnapshot: DailyAggregateSnapshotModel?
   private var recentSnapshots: [DailyAggregateSnapshotModel] = []
 
   private let barChartView = DailyCardBarChartView()
+  private let timeBarChartView = DailyTimeBarChartView()
 
   public init(dependencies: Dependencies) {
     self.dbClient = dependencies.mediaListeningSRSDatabaseClient
@@ -86,11 +88,21 @@ public final class StudyStatsVC: UIViewController {
           dailyCounts[dayStart, default: 0] += session.cardsReviewed
         }
         var chartData: [DailyCardBarChartView.DayData] = []
+        var dailySessionDurations: [Date: [TimeInterval]] = [:]
+        for session in recentModels {
+          let dayStart = calendar.startOfDay(for: session.startedAt)
+          let duration = session.endedAt.timeIntervalSince(session.startedAt)
+          dailySessionDurations[dayStart, default: []].append(duration)
+        }
+        var timeChartData: [DailyTimeBarChartView.DayData] = []
         for offset in 0..<7 {
           let day = calendar.date(byAdding: .day, value: offset, to: sevenDaysAgo)!
           let label = dayOfWeekFormatter.string(from: day)
           let count = dailyCounts[day] ?? 0
           chartData.append(.init(label: label, count: count))
+          let sessions = (dailySessionDurations[day] ?? [])
+            .map { DailyTimeBarChartView.SessionSegment(duration: $0) }
+          timeChartData.append(.init(label: label, sessions: sessions))
         }
 
         await MainActor.run {
@@ -102,6 +114,9 @@ public final class StudyStatsVC: UIViewController {
 
           self.last7DaysData = chartData
           self.barChartView.setData(chartData)
+
+          self.last7DaysTimeData = timeChartData
+          self.timeBarChartView.setData(timeChartData)
 
           self.recentSessions = recentModels.reversed()
 
@@ -161,15 +176,16 @@ public final class StudyStatsVC: UIViewController {
 
 extension StudyStatsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 5 }
+  public func numberOfSections(in tableView: UITableView) -> Int { 6 }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     switch section {
     case 0: return 3
     case 1: return 1
-    case 2: return max(recentSessions.count, 1)
-    case 3: return latestSnapshot != nil ? 5 : 1
-    case 4: return max(recentSnapshots.count, 1)
+    case 2: return 1
+    case 3: return max(recentSessions.count, 1)
+    case 4: return latestSnapshot != nil ? 5 : 1
+    case 5: return max(recentSnapshots.count, 1)
     default: return 0
     }
   }
@@ -178,9 +194,10 @@ extension StudyStatsVC: UITableViewDataSource {
     switch section {
     case 0: return "Today"
     case 1: return "Cards Reviewed (Last 7 Days)"
-    case 2: return "Recent Sessions (30 days)"
-    case 3: return "Deck Snapshot (Latest)"
-    case 4: return "Snapshot History (30 days)"
+    case 2: return "Time Studied (Last 7 Days)"
+    case 3: return "Recent Sessions (30 days)"
+    case 4: return "Deck Snapshot (Latest)"
+    case 5: return "Snapshot History (30 days)"
     default: return nil
     }
   }
@@ -221,6 +238,21 @@ extension StudyStatsVC: UITableViewDataSource {
       return cell
 
     case 2:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      timeBarChartView.removeFromSuperview()
+      timeBarChartView.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(timeBarChartView)
+      NSLayoutConstraint.activate([
+        timeBarChartView.topAnchor.constraint(equalTo: cell.contentView.topAnchor),
+        timeBarChartView.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 8),
+        timeBarChartView.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -8),
+        timeBarChartView.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor),
+        timeBarChartView.heightAnchor.constraint(equalToConstant: 200),
+      ])
+      return cell
+
+    case 3:
       if recentSessions.isEmpty {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No study sessions yet"
@@ -241,7 +273,7 @@ extension StudyStatsVC: UITableViewDataSource {
       cell.detailTextLabel?.textColor = .secondaryLabel
       return cell
 
-    case 3:
+    case 4:
       guard let snapshot = latestSnapshot else {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No snapshots yet"
@@ -274,7 +306,7 @@ extension StudyStatsVC: UITableViewDataSource {
       }
       return cell
 
-    case 4:
+    case 5:
       if recentSnapshots.isEmpty {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No snapshots yet"

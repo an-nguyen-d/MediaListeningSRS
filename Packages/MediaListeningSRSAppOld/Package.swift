@@ -317,7 +317,8 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.iYomi.Product.DictionaryUIKit.targetDependency,
           PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
           PackageDependency.iYomi.Product.JapaneseModels.targetDependency,
-        ]
+        ],
+        resources: [.process("Resources")]
       )
 
     case .Shared:

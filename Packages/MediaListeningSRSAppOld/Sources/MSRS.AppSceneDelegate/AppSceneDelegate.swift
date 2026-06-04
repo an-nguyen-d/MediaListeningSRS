@@ -35,10 +35,13 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
     startPeriodicSyncTimer()
     observeAppLifecycleNotifications()
     performInitialSyncThenMaintenance()
+    setupGlobalHotkeys()
+    setupFloatingWindow()
   }
 
   open func sceneDidBecomeActive(_ scene: UIScene) {
     handleAppDidBecomeActive()
+    applyFloatingWindowSetting()
   }
 
   open func sceneWillResignActive(_ scene: UIScene) {
@@ -419,6 +422,93 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
       formatter.timeStyle = .short
       return formatter.string(from: date)
     }
+  }
+
+  // MARK: - Global hotkeys
+
+  private func setupGlobalHotkeys() {
+    #if targetEnvironment(macCatalyst)
+    let eventMask = (1 << CGEventType.keyDown.rawValue)
+
+    let hotkeyMap: [Int64: (String, Notification.Name)] = [
+      12: ("Q", GlobalHotkey.commandOptionQ),
+      13: ("W", GlobalHotkey.commandOptionW),
+      14: ("E", GlobalHotkey.commandOptionE),
+      15: ("R", GlobalHotkey.commandOptionR),
+      17: ("T", GlobalHotkey.commandOptionT),
+    ]
+
+    let callback: CGEventTapCallBack = { _, _, event, refcon in
+      let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+      let flags = event.flags
+
+      guard flags.contains([.maskCommand, .maskAlternate]) else {
+        return Unmanaged.passRetained(event)
+      }
+
+      let map = Unmanaged<NSDictionary>.fromOpaque(refcon!).takeUnretainedValue()
+      guard let entry = map[NSNumber(value: keyCode)] as? [Any],
+            let label = entry[0] as? String,
+            let name = entry[1] as? Notification.Name else {
+        return Unmanaged.passRetained(event)
+      }
+
+      DispatchQueue.main.async {
+        print("[GlobalHotkey] ⌘⌥\(label) triggered")
+        NotificationCenter.default.post(name: name, object: nil)
+      }
+      return nil
+    }
+
+    let mapDict = NSMutableDictionary()
+    for (code, (label, name)) in hotkeyMap {
+      mapDict[NSNumber(value: code)] = [label, name] as [Any]
+    }
+    let retainedMap = Unmanaged.passRetained(mapDict as NSDictionary)
+
+    guard let eventTap = CGEvent.tapCreate(
+      tap: .cgSessionEventTap,
+      place: .headInsertEventTap,
+      options: .defaultTap,
+      eventsOfInterest: CGEventMask(eventMask),
+      callback: callback,
+      userInfo: retainedMap.toOpaque()
+    ) else {
+      print("[GlobalHotkey] Failed to create event tap — check Accessibility permissions")
+      return
+    }
+
+    let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+    CGEvent.tapEnable(tap: eventTap, enable: true)
+    print("[GlobalHotkey] Event tap registered for ⌘⌥ Q/W/E/R/T")
+    #endif
+  }
+
+  // MARK: - Floating window
+
+  private func setupFloatingWindow() {
+    #if targetEnvironment(macCatalyst)
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(floatingWindowSettingChanged),
+      name: FloatingWindowSettings.didChangeNotification,
+      object: nil
+    )
+    DispatchQueue.main.async {
+      self.applyFloatingWindowSetting()
+    }
+    #endif
+  }
+
+  @objc private func floatingWindowSettingChanged() {
+    applyFloatingWindowSetting()
+  }
+
+  private func applyFloatingWindowSetting() {
+    #if targetEnvironment(macCatalyst)
+    MacWindowBridge.applyFloating(FloatingWindowSettings.isEnabled)
+    #endif
   }
 
   // MARK: - Daily maintenance

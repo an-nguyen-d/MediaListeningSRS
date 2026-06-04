@@ -20,6 +20,7 @@ public final class SettingsVC: UIViewController {
     case studyTracking
     case llmGrading
     case sync
+    case floatingWindow
   }
 
   private let mediaListeningSRSDatabaseClient: MediaListeningSRSDatabaseClient
@@ -144,6 +145,10 @@ public final class SettingsVC: UIViewController {
     persistSettings()
   }
 
+  @objc private func floatingWindowToggleChanged(_ sender: UISwitch) {
+    FloatingWindowSettings.isEnabled = sender.isOn
+  }
+
   @objc private func condensedModeToggleChanged(_ sender: UISwitch) {
     MSRSAppSettings.condensedReviewMode = sender.isOn
   }
@@ -266,6 +271,11 @@ extension SettingsVC: UITableViewDataSource {
     case .autoFlip: return MSRSAppSettings.autoFlipEnabled ? 2 : 1
     case .autoPass: return MSRSAppSettings.autoPassEnabled ? 2 : 1
     case .reviewFontSize: return 2
+    #if targetEnvironment(macCatalyst)
+    case .floatingWindow: return 1
+    #else
+    case .floatingWindow: return 0
+    #endif
     default: return 1
     }
   }
@@ -287,6 +297,11 @@ extension SettingsVC: UITableViewDataSource {
     case .studyTracking: return "Study Tracking"
     case .llmGrading: return "LLM Grading"
     case .sync: return "Sync"
+    #if targetEnvironment(macCatalyst)
+    case .floatingWindow: return "Mac Window"
+    #else
+    case .floatingWindow: return nil
+    #endif
     }
   }
 
@@ -321,6 +336,8 @@ extension SettingsVC: UITableViewDataSource {
       return "System prompt sent to the local Ollama LLM when grading typed answers. Tap to edit. The Japanese transcript and English translation are appended automatically."
     case .sync:
       return "Sync interval: how often the app checks for changes (minimum 10s). Takes effect on next app launch or foreground."
+    case .floatingWindow:
+      return "When enabled, the app window stays above all other windows."
     }
   }
 
@@ -610,6 +627,16 @@ extension SettingsVC: UITableViewDataSource {
 
     case .sync:
       return buildSyncCell(row: indexPath.row)
+
+    case .floatingWindow:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.textLabel?.text = "Floating Window (Always on Top)"
+      cell.selectionStyle = .none
+      let toggle = UISwitch()
+      toggle.isOn = FloatingWindowSettings.isEnabled
+      toggle.addTarget(self, action: #selector(floatingWindowToggleChanged(_:)), for: .valueChanged)
+      cell.accessoryView = toggle
+      return cell
     }
   }
 

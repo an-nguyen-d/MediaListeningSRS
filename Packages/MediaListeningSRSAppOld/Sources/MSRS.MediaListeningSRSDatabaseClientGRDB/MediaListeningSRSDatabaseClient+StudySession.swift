@@ -42,10 +42,12 @@ extension MediaListeningSRSDatabaseClient {
       },
       fetchInDateRange: { request in
         try await databaseWriter.read { db in
+          let minimumDuration: TimeInterval = 60
           let records = try StudySessionRecord
             .filter(Column("startedAt") >= request.startDate && Column("startedAt") <= request.endDate)
             .order(Column("startedAt").asc)
             .fetchAll(db)
+            .filter { $0.endedAt.timeIntervalSince($0.startedAt) >= minimumDuration }
           return .init(models: records.map { GRDBMapper.StudySession.mapToModel(from: $0) })
         }
       }

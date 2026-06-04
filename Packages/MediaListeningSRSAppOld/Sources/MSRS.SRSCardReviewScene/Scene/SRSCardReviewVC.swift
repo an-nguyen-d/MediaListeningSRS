@@ -7,6 +7,7 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
   private let contentView = SRSCardReviewView()
   private let interactor: SRSCardReviewInteractor
   private var richDictionaryPopup: RichDictionaryPopupController?
+  private var pendingGradeOverlayColor: UIColor?
 
   public init(dependencies: SRSCardReviewModels.Dependencies) {
     let presenter = SRSCardReviewPresenter()
@@ -74,6 +75,14 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
       )
     }
     interactor.sendAction(.viewDidLoad)
+    observeGlobalHotkeys()
+  }
+
+  private func observeGlobalHotkeys() {
+    let nc = NotificationCenter.default
+    nc.addObserver(self, selector: #selector(returnPressed), name: GlobalHotkey.commandOptionQ, object: nil)
+    nc.addObserver(self, selector: #selector(failPressed), name: GlobalHotkey.commandOptionW, object: nil)
+    nc.addObserver(self, selector: #selector(passPressed), name: GlobalHotkey.commandOptionE, object: nil)
   }
 
   public override func viewDidAppear(_ animated: Bool) {
@@ -108,11 +117,15 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
 
   @objc private func failPressed() {
     guard contentView.isShowingBackSide else { return }
+    ReviewSoundPlayer.play(.failCard)
+    pendingGradeOverlayColor = .systemRed
     interactor.sendAction(.gradedAndNext(.fail))
   }
 
   @objc private func passPressed() {
     guard contentView.isShowingBackSide else { return }
+    ReviewSoundPlayer.play(.passCard)
+    pendingGradeOverlayColor = .systemGreen
     interactor.sendAction(.gradedAndNext(.pass))
   }
 
@@ -123,7 +136,27 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
   // MARK: - SRSCardReviewDisplayer
 
   func displayCard(_ viewModel: SRSCardReviewModels.CardViewModel) {
+    let overlayColor = pendingGradeOverlayColor
+    pendingGradeOverlayColor = nil
+    ReviewSoundPlayer.play(.showCard)
     contentView.setCard(viewModel)
+    if let overlayColor {
+      showGradeOverlay(color: overlayColor)
+    }
+  }
+
+  private func showGradeOverlay(color: UIColor) {
+    let overlay = UIView()
+    overlay.backgroundColor = color.withAlphaComponent(0.45)
+    overlay.frame = view.bounds
+    overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    overlay.isUserInteractionEnabled = false
+    view.addSubview(overlay)
+    UIView.animate(withDuration: 1.0, delay: 0, options: .curveEaseOut) {
+      overlay.alpha = 0
+    } completion: { _ in
+      overlay.removeFromSuperview()
+    }
   }
 
   func displayRevealBack() {
