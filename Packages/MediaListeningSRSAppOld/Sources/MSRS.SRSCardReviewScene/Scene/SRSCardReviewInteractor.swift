@@ -25,7 +25,6 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   private let exportedClipsDirectoryURL: URL
 
   private static let batchSize = 5
-  private static let prefetchCount = 2
 
   private var currentBatch: [SRSCardModel] = []
   private var currentBatchIndex: Int = 0
@@ -35,6 +34,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   private let studySessionTracker: StudySessionTracker
   private var currentTranscriptText: String = ""
   private var currentEnglishTranslationText: String?
+  private var downloadsInProgress: Set<String> = []
 
   init(
     presenter: SRSCardReviewPresenter,
@@ -406,30 +406,48 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
 
   #if !targetEnvironment(macCatalyst)
   private func prefetchUpcomingCards() {
-    let startIndex = currentBatchIndex + 1
-    let endIndex = min(startIndex + Self.prefetchCount, currentBatch.count)
-    guard startIndex < endIndex else { return }
-
-    let upcoming = currentBatch[startIndex..<endIndex]
+    let prefetchCount = MSRSAppSettings.clipPrefetchCount
+    guard prefetchCount > 0 else { return }
+    let currentCardID = currentBatchIndex < currentBatch.count ? currentBatch[currentBatchIndex].id : nil
     let clipsDir = exportedClipsDirectoryURL
     let storageClient = clipStorageClient
 
-    for card in upcoming {
-      let clipFileURL = clipsDir.appendingPathComponent(card.clipRelativeFilePath)
-      guard !FileManager.default.fileExists(atPath: clipFileURL.path) else { continue }
+    Task { [weak self, mediaListeningSRSDatabaseClient] in
+      guard let self else { return }
+      let fetchLimit = prefetchCount + 1
+      let response = try? await mediaListeningSRSDatabaseClient.srsCard.fetchDueCards(
+        .init(asOf: Date(), limit: fetchLimit)
+      )
+      guard let cards = response?.cards else { return }
 
-      Task.detached(priority: .utility) {
-        let remotePath = "clips/\(card.clipRelativeFilePath)"
-        _ = try? await storageClient.download(.init(
-          remotePath: remotePath,
-          localFileURL: clipFileURL
-        ))
-        let thumbRemotePath = "clips/\(card.clipRelativeFilePath.replacingOccurrences(of: ".mp4", with: ".jpg"))"
-        let thumbnailURL = clipFileURL.deletingPathExtension().appendingPathExtension("jpg")
-        _ = try? await storageClient.download(.init(
-          remotePath: thumbRemotePath,
-          localFileURL: thumbnailURL
-        ))
+      let upcoming = cards.filter { $0.id != currentCardID }
+        .prefix(prefetchCount)
+
+      await MainActor.run {
+        for card in upcoming {
+          let relativePath = card.clipRelativeFilePath
+          let clipFileURL = clipsDir.appendingPathComponent(relativePath)
+          guard !FileManager.default.fileExists(atPath: clipFileURL.path),
+                !self.downloadsInProgress.contains(relativePath) else { continue }
+          self.downloadsInProgress.insert(relativePath)
+
+          Task.detached(priority: .utility) { [weak self] in
+            let remotePath = "clips/\(relativePath)"
+            _ = try? await storageClient.download(.init(
+              remotePath: remotePath,
+              localFileURL: clipFileURL
+            ))
+            let thumbRemotePath = "clips/\(relativePath.replacingOccurrences(of: ".mp4", with: ".jpg"))"
+            let thumbnailURL = clipFileURL.deletingPathExtension().appendingPathExtension("jpg")
+            _ = try? await storageClient.download(.init(
+              remotePath: thumbRemotePath,
+              localFileURL: thumbnailURL
+            ))
+            await MainActor.run { [weak self] in
+              self?.downloadsInProgress.remove(relativePath)
+            }
+          }
+        }
       }
     }
   }

@@ -81,6 +81,7 @@ final class SRSCardReviewView: UIView {
 
   private let gradientView = GradientOverlayView()
   private let condensedSettingsButton = UIButton(type: .system)
+  private let settingsDimView = UIView()
   private let settingsPanel = UIView()
   private let settingsLoopButton = UIButton(type: .system)
   private let settingsToggleButton = UIButton(type: .system)
@@ -89,14 +90,15 @@ final class SRSCardReviewView: UIView {
   private let buttonHeightSlider = UISlider()
   private let buttonHeightValueLabel = UILabel()
 
+  // MARK: - Auto-flip
+
+  private let autoFlipFillView = UIView()
+  private var autoFlipFillWidthConstraint: NSLayoutConstraint?
+
   // MARK: - Auto-pass
 
-  private let autoPassContainer = UIView()
-  private let autoPassProgressBar = UIView()
-  private let autoPassProgressFill = UIView()
-  private let autoPassLabel = UILabel()
-  private let autoPassCancelButton = UIButton(type: .system)
-  private var autoPassProgressWidthConstraint: NSLayoutConstraint?
+  private let autoPassFillView = UIView()
+  private var autoPassFillWidthConstraint: NSLayoutConstraint?
 
   // MARK: - Other
 
@@ -121,6 +123,11 @@ final class SRSCardReviewView: UIView {
   private var currentVideoFileURL: URL?
   private var autoLoopWorkItem: DispatchWorkItem?
 
+  private var autoFlipTimer: Timer?
+  private var autoFlipStartDate: Date?
+  private var autoFlipCancelled = false
+  private var audioHasPlayedThrough = false
+
   private var autoPassTimer: Timer?
   private var autoPassStartDate: Date?
   private var autoPassCancelled = false
@@ -138,6 +145,7 @@ final class SRSCardReviewView: UIView {
     setUpBack()
     setUpLLMResult()
     setUpEmptyLabel()
+    setUpAutoFlip()
     setUpAutoPass()
     if isCondensedMode {
       setUpCondensedOverlay()
@@ -416,11 +424,7 @@ final class SRSCardReviewView: UIView {
   private func setUpBack() {
     backContainer.translatesAutoresizingMaskIntoConstraints = false
 
-    #if targetEnvironment(macCatalyst)
-    backTranscriptView.transcriptFont = .systemFont(ofSize: 56, weight: .regular)
-    #else
-    backTranscriptView.transcriptFont = .systemFont(ofSize: 28, weight: .regular)
-    #endif
+    backTranscriptView.transcriptFont = .systemFont(ofSize: MSRSAppSettings.reviewTranscriptFontSize, weight: .regular)
     if isCondensedMode {
       backTranscriptView.transcriptTextColor = .white
     }
@@ -438,7 +442,7 @@ final class SRSCardReviewView: UIView {
     backInflectionAnnotationsLabel.isHidden = true
     backInflectionAnnotationsLabel.translatesAutoresizingMaskIntoConstraints = false
 
-    backTranslationLabel.font = .preferredFont(forTextStyle: .title3)
+    backTranslationLabel.font = .systemFont(ofSize: MSRSAppSettings.reviewTranslationFontSize, weight: .regular)
     backTranslationLabel.textColor = isCondensedMode ? .white.withAlphaComponent(0.8) : .secondaryLabel
     backTranslationLabel.numberOfLines = 0
     backTranslationLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -511,64 +515,41 @@ final class SRSCardReviewView: UIView {
     emptyLabel.translatesAutoresizingMaskIntoConstraints = false
   }
 
-  private func setUpAutoPass() {
-    autoPassContainer.translatesAutoresizingMaskIntoConstraints = false
-    autoPassContainer.isHidden = true
+  private func setUpAutoFlip() {
+    autoFlipFillView.backgroundColor = .systemBlue
+    autoFlipFillView.isUserInteractionEnabled = false
+    autoFlipFillView.translatesAutoresizingMaskIntoConstraints = false
+    autoFlipFillView.isHidden = true
+    frontShowBackButton.clipsToBounds = true
+    frontShowBackButton.insertSubview(autoFlipFillView, at: 0)
 
-    autoPassProgressBar.backgroundColor = isCondensedMode ? UIColor.white.withAlphaComponent(0.15) : .systemGray5
-    autoPassProgressBar.layer.cornerRadius = 4
-    autoPassProgressBar.clipsToBounds = true
-    autoPassProgressBar.translatesAutoresizingMaskIntoConstraints = false
-
-    autoPassProgressFill.backgroundColor = .systemGreen
-    autoPassProgressFill.translatesAutoresizingMaskIntoConstraints = false
-    autoPassProgressBar.addSubview(autoPassProgressFill)
-
-    let progressWidth = autoPassProgressFill.widthAnchor.constraint(equalToConstant: 0)
-    autoPassProgressWidthConstraint = progressWidth
+    let widthConstraint = autoFlipFillView.widthAnchor.constraint(equalToConstant: 0)
+    autoFlipFillWidthConstraint = widthConstraint
 
     NSLayoutConstraint.activate([
-      autoPassProgressFill.topAnchor.constraint(equalTo: autoPassProgressBar.topAnchor),
-      autoPassProgressFill.leadingAnchor.constraint(equalTo: autoPassProgressBar.leadingAnchor),
-      autoPassProgressFill.bottomAnchor.constraint(equalTo: autoPassProgressBar.bottomAnchor),
-      progressWidth,
+      autoFlipFillView.topAnchor.constraint(equalTo: frontShowBackButton.topAnchor),
+      autoFlipFillView.leadingAnchor.constraint(equalTo: frontShowBackButton.leadingAnchor),
+      autoFlipFillView.bottomAnchor.constraint(equalTo: frontShowBackButton.bottomAnchor),
+      widthConstraint,
     ])
+  }
 
-    autoPassLabel.font = .monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
-    autoPassLabel.textColor = isCondensedMode ? .white : .secondaryLabel
-    autoPassLabel.textAlignment = .center
-    autoPassLabel.translatesAutoresizingMaskIntoConstraints = false
+  private func setUpAutoPass() {
+    autoPassFillView.backgroundColor = .systemGreen
+    autoPassFillView.isUserInteractionEnabled = false
+    autoPassFillView.translatesAutoresizingMaskIntoConstraints = false
+    autoPassFillView.isHidden = true
+    backPassButton.clipsToBounds = true
+    backPassButton.insertSubview(autoPassFillView, at: 0)
 
-    var cancelConfig = UIButton.Configuration.tinted()
-    cancelConfig.title = "Wait"
-    cancelConfig.image = UIImage(systemName: "pause.circle")
-    cancelConfig.imagePadding = 6
-    cancelConfig.baseBackgroundColor = .systemOrange
-    cancelConfig.baseForegroundColor = isCondensedMode ? .white : .systemOrange
-    cancelConfig.cornerStyle = .medium
-    cancelConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
-    autoPassCancelButton.configuration = cancelConfig
-    autoPassCancelButton.translatesAutoresizingMaskIntoConstraints = false
-    autoPassCancelButton.addTarget(self, action: #selector(handleAutoPassCancel), for: .touchUpInside)
-
-    let row = UIStackView(arrangedSubviews: [autoPassLabel, autoPassCancelButton])
-    row.axis = .horizontal
-    row.spacing = 12
-    row.alignment = .center
-    row.translatesAutoresizingMaskIntoConstraints = false
-
-    autoPassContainer.addSubview(autoPassProgressBar)
-    autoPassContainer.addSubview(row)
+    let widthConstraint = autoPassFillView.widthAnchor.constraint(equalToConstant: 0)
+    autoPassFillWidthConstraint = widthConstraint
 
     NSLayoutConstraint.activate([
-      autoPassProgressBar.topAnchor.constraint(equalTo: autoPassContainer.topAnchor),
-      autoPassProgressBar.leadingAnchor.constraint(equalTo: autoPassContainer.leadingAnchor),
-      autoPassProgressBar.trailingAnchor.constraint(equalTo: autoPassContainer.trailingAnchor),
-      autoPassProgressBar.heightAnchor.constraint(equalToConstant: 8),
-
-      row.topAnchor.constraint(equalTo: autoPassProgressBar.bottomAnchor, constant: 6),
-      row.centerXAnchor.constraint(equalTo: autoPassContainer.centerXAnchor),
-      row.bottomAnchor.constraint(equalTo: autoPassContainer.bottomAnchor),
+      autoPassFillView.topAnchor.constraint(equalTo: backPassButton.topAnchor),
+      autoPassFillView.leadingAnchor.constraint(equalTo: backPassButton.leadingAnchor),
+      autoPassFillView.bottomAnchor.constraint(equalTo: backPassButton.bottomAnchor),
+      widthConstraint,
     ])
   }
 
@@ -611,7 +592,6 @@ final class SRSCardReviewView: UIView {
     backContainer.addSubview(backTranslationLabel)
     backContainer.addSubview(llmResultContainer)
     backContainer.addSubview(backGradeRow)
-    backContainer.addSubview(autoPassContainer)
 
     NSLayoutConstraint.activate([
       positionLabel.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 4),
@@ -680,11 +660,7 @@ final class SRSCardReviewView: UIView {
 
       backGradeRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backGradeRow.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
-
-      autoPassContainer.topAnchor.constraint(equalTo: backGradeRow.bottomAnchor, constant: 8),
-      autoPassContainer.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
-      autoPassContainer.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
-      autoPassContainer.bottomAnchor.constraint(equalTo: backContainer.bottomAnchor),
+      backGradeRow.bottomAnchor.constraint(equalTo: backContainer.bottomAnchor),
 
       emptyLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
       emptyLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -716,7 +692,13 @@ final class SRSCardReviewView: UIView {
   }
 
   private func setUpSettingsPanel() {
-    settingsPanel.backgroundColor = UIColor.black.withAlphaComponent(0.9)
+    settingsDimView.backgroundColor = UIColor.black.withAlphaComponent(0.2)
+    settingsDimView.translatesAutoresizingMaskIntoConstraints = false
+    settingsDimView.isHidden = true
+    let dimTap = UITapGestureRecognizer(target: self, action: #selector(handleSettingsToggle))
+    settingsDimView.addGestureRecognizer(dimTap)
+
+    settingsPanel.backgroundColor = UIColor(white: 0.15, alpha: 1)
     settingsPanel.layer.cornerRadius = 16
     settingsPanel.translatesAutoresizingMaskIntoConstraints = false
     settingsPanel.isHidden = true
@@ -779,13 +761,15 @@ final class SRSCardReviewView: UIView {
   }
 
   private func setUpCondensedLayout() {
+    // Z-order: video -> progress bar -> gradient -> all UI on top
     addSubview(videoStageView)
-    addSubview(gradientView)
     addSubview(clipProgressBar)
+    addSubview(gradientView)
     addSubview(frontContainer)
     addSubview(backContainer)
     addSubview(positionLabel)
     addSubview(condensedSettingsButton)
+    addSubview(settingsDimView)
     addSubview(settingsPanel)
 
     let backGradeRow = UIStackView(arrangedSubviews: [backFailButton, backPassButton])
@@ -803,7 +787,6 @@ final class SRSCardReviewView: UIView {
     backContainer.addSubview(backTranslationLabel)
     backContainer.addSubview(llmResultContainer)
     backContainer.addSubview(backGradeRow)
-    backContainer.addSubview(autoPassContainer)
 
     let hPad: CGFloat = 16
 
@@ -819,14 +802,14 @@ final class SRSCardReviewView: UIView {
       videoStageView.trailingAnchor.constraint(equalTo: trailingAnchor),
       aspectConstraint,
 
+      clipProgressBar.topAnchor.constraint(equalTo: videoStageView.bottomAnchor),
+      clipProgressBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+      clipProgressBar.trailingAnchor.constraint(equalTo: trailingAnchor),
+
       gradientView.leadingAnchor.constraint(equalTo: leadingAnchor),
       gradientView.trailingAnchor.constraint(equalTo: trailingAnchor),
       gradientView.bottomAnchor.constraint(equalTo: bottomAnchor),
       gradientView.heightAnchor.constraint(equalTo: heightAnchor, multiplier: 0.55),
-
-      clipProgressBar.leadingAnchor.constraint(equalTo: leadingAnchor),
-      clipProgressBar.trailingAnchor.constraint(equalTo: trailingAnchor),
-      clipProgressBar.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -4),
 
       condensedSettingsButton.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 8),
       condensedSettingsButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: hPad),
@@ -839,7 +822,7 @@ final class SRSCardReviewView: UIView {
       // Front container — bottom-aligned
       frontContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: hPad),
       frontContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -hPad),
-      frontContainer.bottomAnchor.constraint(equalTo: clipProgressBar.topAnchor, constant: -8),
+      frontContainer.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -12),
 
       frontTranscriptRevealContainer.topAnchor.constraint(equalTo: frontContainer.topAnchor),
       frontTranscriptRevealContainer.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
@@ -857,7 +840,7 @@ final class SRSCardReviewView: UIView {
       // Back container — bottom-aligned
       backContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: hPad),
       backContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -hPad),
-      backContainer.bottomAnchor.constraint(equalTo: clipProgressBar.topAnchor, constant: -8),
+      backContainer.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -12),
 
       backTranscriptView.topAnchor.constraint(equalTo: backContainer.topAnchor),
       backTranscriptView.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
@@ -878,11 +861,13 @@ final class SRSCardReviewView: UIView {
       backGradeRow.topAnchor.constraint(equalTo: llmResultContainer.bottomAnchor, constant: 8),
       backGradeRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backGradeRow.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+      backGradeRow.bottomAnchor.constraint(equalTo: backContainer.bottomAnchor),
 
-      autoPassContainer.topAnchor.constraint(equalTo: backGradeRow.bottomAnchor, constant: 8),
-      autoPassContainer.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
-      autoPassContainer.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
-      autoPassContainer.bottomAnchor.constraint(equalTo: backContainer.bottomAnchor),
+      // Dim view
+      settingsDimView.topAnchor.constraint(equalTo: topAnchor),
+      settingsDimView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      settingsDimView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      settingsDimView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
       // Settings panel
       settingsPanel.centerXAnchor.constraint(equalTo: centerXAnchor),
@@ -1027,6 +1012,10 @@ final class SRSCardReviewView: UIView {
     resetGradeButtonHighlights()
     stopAutoPassTimer()
     autoPassCancelled = false
+    stopAutoFlipTimer()
+    autoFlipCancelled = false
+    audioHasPlayedThrough = false
+    applyAutoFlipButtonState()
 
     frontTranscriptRevealContainer.isHidden = !MSRSAppSettings.showFrontTranscript
     applyVideoStageVisibility()
@@ -1044,6 +1033,7 @@ final class SRSCardReviewView: UIView {
 
   func revealBack() {
     frontAnswerTextField.resignFirstResponder()
+    stopAutoFlipTimer()
     isShowingBack = true
     frontContainer.isHidden = true
     backContainer.isHidden = false
@@ -1057,6 +1047,7 @@ final class SRSCardReviewView: UIView {
 
   func showEmptyState(message: String) {
     stopAutoPassTimer()
+    stopAutoFlipTimer()
     emptyLabel.text = message
     emptyLabel.isHidden = false
     videoStageView.isHidden = true
@@ -1066,6 +1057,7 @@ final class SRSCardReviewView: UIView {
       gradientView.isHidden = true
       condensedSettingsButton.isHidden = true
       settingsPanel.isHidden = true
+      settingsDimView.isHidden = true
     }
     stopPlayback()
   }
@@ -1106,6 +1098,19 @@ final class SRSCardReviewView: UIView {
     llmReasoningLabel.isHidden = false
   }
 
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    let isDirectTouch = event?.type == .touches
+    if isDirectTouch {
+      if autoPassTimer != nil {
+        cancelAutoPass()
+      }
+      if !isShowingBack {
+        cancelAutoFlip()
+      }
+    }
+    return super.hitTest(point, with: event)
+  }
+
   override func layoutSubviews() {
     super.layoutSubviews()
     updateBlurFrame()
@@ -1120,7 +1125,7 @@ final class SRSCardReviewView: UIView {
 
   private func applyVideoStageVisibility() {
     if isShowingBack {
-      playerView.isHidden = !isVideoPlaying
+      playerView.isHidden = false
       blackMaskView.isHidden = true
       blurContainerView.isHidden = true
       return
@@ -1274,6 +1279,12 @@ final class SRSCardReviewView: UIView {
     player?.pause()
     isVideoPlaying = false
     removeEndObserver()
+
+    if !isShowingBack && !audioHasPlayedThrough {
+      audioHasPlayedThrough = true
+      startAutoFlipTimerIfNeeded()
+    }
+
     if MSRSAppSettings.autoLoopVideo {
       let workItem = DispatchWorkItem { [weak self] in
         self?.playFromStart()
@@ -1397,17 +1408,21 @@ final class SRSCardReviewView: UIView {
     onGraded?(.pass)
   }
 
-  @objc private func handleAutoPassCancel() {
+  private func cancelAutoPass() {
+    guard autoPassTimer != nil else { return }
     autoPassCancelled = true
     stopAutoPassTimer()
   }
 
   @objc private func handleSettingsToggle() {
-    settingsPanel.isHidden.toggle()
+    let willShow = settingsPanel.isHidden
+    settingsPanel.isHidden = !willShow
+    settingsDimView.isHidden = !willShow
   }
 
   @objc private func handleDismissReview() {
     settingsPanel.isHidden = true
+    settingsDimView.isHidden = true
     onDismissReview?()
   }
 
@@ -1419,19 +1434,76 @@ final class SRSCardReviewView: UIView {
     UIView.animate(withDuration: 0.1) { self.layoutIfNeeded() }
   }
 
+  // MARK: - Auto-flip timer
+
+  private func startAutoFlipTimerIfNeeded() {
+    stopAutoFlipTimer()
+    guard MSRSAppSettings.autoFlipEnabled, !autoFlipCancelled else { return }
+    autoFlipStartDate = Date()
+
+    frontShowBackButton.configuration?.baseBackgroundColor = .systemIndigo.withAlphaComponent(0.3)
+    autoFlipFillView.isHidden = false
+    autoFlipFillWidthConstraint?.constant = 0
+    layoutIfNeeded()
+
+    let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.tickAutoFlip()
+      }
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    autoFlipTimer = timer
+  }
+
+  private func tickAutoFlip() {
+    guard let startDate = autoFlipStartDate else { return }
+    let delay = MSRSAppSettings.autoFlipDelay
+    let elapsed = Date().timeIntervalSince(startDate)
+    let fraction = min(elapsed / delay, 1.0)
+
+    autoFlipFillWidthConstraint?.constant = frontShowBackButton.bounds.width * fraction
+
+    if elapsed >= delay {
+      stopAutoFlipTimer()
+      onRevealBackTapped?()
+    }
+  }
+
+  private func stopAutoFlipTimer() {
+    autoFlipTimer?.invalidate()
+    autoFlipTimer = nil
+    autoFlipStartDate = nil
+    autoFlipFillView.isHidden = true
+    autoFlipFillWidthConstraint?.constant = 0
+    frontShowBackButton.configuration?.baseBackgroundColor = .systemIndigo
+  }
+
+  private func cancelAutoFlip() {
+    guard !autoFlipCancelled else { return }
+    autoFlipCancelled = true
+    stopAutoFlipTimer()
+    applyAutoFlipButtonState()
+  }
+
+  private func applyAutoFlipButtonState() {
+    if MSRSAppSettings.autoFlipEnabled && !autoFlipCancelled {
+      frontShowBackButton.configuration?.baseBackgroundColor = .systemIndigo.withAlphaComponent(0.3)
+    } else {
+      frontShowBackButton.configuration?.baseBackgroundColor = .systemIndigo
+    }
+  }
+
   // MARK: - Auto-pass timer
 
   private func startAutoPassTimerIfNeeded() {
     stopAutoPassTimer()
-    guard MSRSAppSettings.autoPassEnabled, !autoPassCancelled else {
-      autoPassContainer.isHidden = true
-      return
-    }
-    let delay = MSRSAppSettings.autoPassDelay
+    guard MSRSAppSettings.autoPassEnabled, !autoPassCancelled else { return }
     autoPassStartDate = Date()
-    autoPassContainer.isHidden = false
-    autoPassLabel.text = "Auto-pass in \(Int(delay))s"
-    autoPassProgressWidthConstraint?.constant = 0
+
+    backFailButton.configuration?.baseBackgroundColor = .systemRed.withAlphaComponent(0.3)
+    backPassButton.configuration?.baseBackgroundColor = .systemGreen.withAlphaComponent(0.3)
+    autoPassFillView.isHidden = false
+    autoPassFillWidthConstraint?.constant = 0
     layoutIfNeeded()
 
     let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
@@ -1449,9 +1521,7 @@ final class SRSCardReviewView: UIView {
     let elapsed = Date().timeIntervalSince(startDate)
     let fraction = min(elapsed / delay, 1.0)
 
-    autoPassProgressWidthConstraint?.constant = autoPassProgressBar.bounds.width * fraction
-    let remaining = max(0, Int(ceil(delay - elapsed)))
-    autoPassLabel.text = "Auto-pass in \(remaining)s"
+    autoPassFillWidthConstraint?.constant = backPassButton.bounds.width * fraction
 
     if elapsed >= delay {
       stopAutoPassTimer()
@@ -1463,7 +1533,10 @@ final class SRSCardReviewView: UIView {
     autoPassTimer?.invalidate()
     autoPassTimer = nil
     autoPassStartDate = nil
-    autoPassContainer.isHidden = true
+    autoPassFillView.isHidden = true
+    autoPassFillWidthConstraint?.constant = 0
+    backFailButton.configuration?.baseBackgroundColor = .systemRed
+    backPassButton.configuration?.baseBackgroundColor = .systemGreen
   }
 
   private func updateGradeButtonTitles(

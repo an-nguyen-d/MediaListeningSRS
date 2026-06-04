@@ -90,6 +90,8 @@ public enum MSRSAppSettings {
   private static let srsButtonHeightKey = "MSRS.srsButtonHeight"
   private static let autoPassEnabledKey = "MSRS.autoPassEnabled"
   private static let autoPassDelayKey = "MSRS.autoPassDelay"
+  private static let autoFlipEnabledKey = "MSRS.autoFlipEnabled"
+  private static let autoFlipDelayKey = "MSRS.autoFlipDelay"
 
   public static let srsButtonHeightMin: CGFloat = 30
   public static let srsButtonHeightMax: CGFloat = 240
@@ -126,6 +128,27 @@ public enum MSRSAppSettings {
     set { UserDefaults.standard.set(newValue, forKey: autoPassEnabledKey) }
   }
 
+  public static var autoFlipEnabled: Bool {
+    get { UserDefaults.standard.bool(forKey: autoFlipEnabledKey) }
+    set { UserDefaults.standard.set(newValue, forKey: autoFlipEnabledKey) }
+  }
+
+  public static let autoFlipDelayMin: Double = 1
+  public static let autoFlipDelayMax: Double = 10
+  public static let autoFlipDelayDefault: Double = 5
+
+  public static var autoFlipDelay: Double {
+    get {
+      let val = UserDefaults.standard.double(forKey: autoFlipDelayKey)
+      guard val > 0 else { return autoFlipDelayDefault }
+      return max(autoFlipDelayMin, min(autoFlipDelayMax, val))
+    }
+    set {
+      let clamped = max(autoFlipDelayMin, min(autoFlipDelayMax, newValue))
+      UserDefaults.standard.set(clamped, forKey: autoFlipDelayKey)
+    }
+  }
+
   public static var autoPassDelay: Double {
     get {
       let val = UserDefaults.standard.double(forKey: autoPassDelayKey)
@@ -148,6 +171,62 @@ public enum MSRSAppSettings {
   public static var syncIntervalSeconds: Int {
     get { max(10, cached.syncIntervalSeconds) }
     set { cached.syncIntervalSeconds = max(10, newValue) }
+  }
+
+  private static let clipPrefetchCountKey = "MSRS.clipPrefetchCount"
+  public static let clipPrefetchCountDefault: Int = 2
+  public static let clipPrefetchCountMin: Int = 0
+  public static let clipPrefetchCountMax: Int = 10
+
+  public static var clipPrefetchCount: Int {
+    get {
+      let val = UserDefaults.standard.integer(forKey: clipPrefetchCountKey)
+      guard val > 0 else { return clipPrefetchCountDefault }
+      return max(clipPrefetchCountMin, min(clipPrefetchCountMax, val))
+    }
+    set {
+      let clamped = max(clipPrefetchCountMin, min(clipPrefetchCountMax, newValue))
+      UserDefaults.standard.set(clamped, forKey: clipPrefetchCountKey)
+    }
+  }
+
+  private static let reviewTranscriptFontSizeKey = "MSRS.reviewTranscriptFontSize"
+  private static let reviewTranslationFontSizeKey = "MSRS.reviewTranslationFontSize"
+
+  public static let reviewTranscriptFontSizeMin: CGFloat = 14
+  public static let reviewTranscriptFontSizeMax: CGFloat = 72
+  #if targetEnvironment(macCatalyst)
+  public static let reviewTranscriptFontSizeDefault: CGFloat = 56
+  #else
+  public static let reviewTranscriptFontSizeDefault: CGFloat = 28
+  #endif
+
+  public static let reviewTranslationFontSizeMin: CGFloat = 10
+  public static let reviewTranslationFontSizeMax: CGFloat = 48
+  public static let reviewTranslationFontSizeDefault: CGFloat = 20
+
+  public static var reviewTranscriptFontSize: CGFloat {
+    get {
+      let val = UserDefaults.standard.double(forKey: reviewTranscriptFontSizeKey)
+      guard val > 0 else { return reviewTranscriptFontSizeDefault }
+      return CGFloat(max(Double(reviewTranscriptFontSizeMin), min(Double(reviewTranscriptFontSizeMax), val)))
+    }
+    set {
+      let clamped = max(reviewTranscriptFontSizeMin, min(reviewTranscriptFontSizeMax, newValue))
+      UserDefaults.standard.set(Double(clamped), forKey: reviewTranscriptFontSizeKey)
+    }
+  }
+
+  public static var reviewTranslationFontSize: CGFloat {
+    get {
+      let val = UserDefaults.standard.double(forKey: reviewTranslationFontSizeKey)
+      guard val > 0 else { return reviewTranslationFontSizeDefault }
+      return CGFloat(max(Double(reviewTranslationFontSizeMin), min(Double(reviewTranslationFontSizeMax), val)))
+    }
+    set {
+      let clamped = max(reviewTranslationFontSizeMin, min(reviewTranslationFontSizeMax, newValue))
+      UserDefaults.standard.set(Double(clamped), forKey: reviewTranslationFontSizeKey)
+    }
   }
 
   public static let candidatePlayDelayDefault: Double = 0

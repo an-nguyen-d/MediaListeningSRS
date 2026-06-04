@@ -11,7 +11,10 @@ public final class SettingsVC: UIViewController {
     case srsReview
     case condensedMode
     case buttonHeight
+    case reviewFontSize
+    case autoFlip
     case autoPass
+    case clipPrefetch
     case scheduling
     case candidateFiltering
     case studyTracking
@@ -34,6 +37,16 @@ public final class SettingsVC: UIViewController {
   private var autoPassDelayValueLabel: UILabel?
   private var candidatePlayDelaySlider: UISlider?
   private var candidatePlayDelayValueLabel: UILabel?
+  private var autoFlipDelaySlider: UISlider?
+  private var autoFlipDelayValueLabel: UILabel?
+  private var clipPrefetchStepper: UIStepper?
+  private var clipPrefetchValueLabel: UILabel?
+  private var transcriptFontSizeSlider: UISlider?
+  private var transcriptFontSizeValueLabel: UILabel?
+  private var transcriptFontPreviewLabel: UILabel?
+  private var translationFontSizeSlider: UISlider?
+  private var translationFontSizeValueLabel: UILabel?
+  private var translationFontPreviewLabel: UILabel?
 
   public init(
     mediaListeningSRSDatabaseClient: MediaListeningSRSDatabaseClient,
@@ -141,6 +154,17 @@ public final class SettingsVC: UIViewController {
     buttonHeightValueLabel?.text = "\(Int(rounded))pt"
   }
 
+  @objc private func autoFlipToggleChanged(_ sender: UISwitch) {
+    MSRSAppSettings.autoFlipEnabled = sender.isOn
+    tableView.reloadSections(IndexSet(integer: Section.autoFlip.rawValue), with: .none)
+  }
+
+  @objc private func autoFlipDelaySliderChanged(_ sender: UISlider) {
+    let rounded = (Double(sender.value) * 10).rounded() / 10
+    MSRSAppSettings.autoFlipDelay = rounded
+    autoFlipDelayValueLabel?.text = String(format: "%.1fs", rounded)
+  }
+
   @objc private func autoPassToggleChanged(_ sender: UISwitch) {
     MSRSAppSettings.autoPassEnabled = sender.isOn
     tableView.reloadSections(IndexSet(integer: Section.autoPass.rawValue), with: .none)
@@ -157,6 +181,26 @@ public final class SettingsVC: UIViewController {
     MSRSAppSettings.candidatePlayDelay = rounded
     candidatePlayDelayValueLabel?.text = String(format: "%.2fs", rounded)
     persistSettings()
+  }
+
+  @objc private func transcriptFontSizeSliderChanged(_ sender: UISlider) {
+    let rounded = CGFloat(sender.value.rounded())
+    MSRSAppSettings.reviewTranscriptFontSize = rounded
+    transcriptFontSizeValueLabel?.text = "\(Int(rounded))pt"
+    transcriptFontPreviewLabel?.font = .systemFont(ofSize: rounded, weight: .regular)
+  }
+
+  @objc private func translationFontSizeSliderChanged(_ sender: UISlider) {
+    let rounded = CGFloat(sender.value.rounded())
+    MSRSAppSettings.reviewTranslationFontSize = rounded
+    translationFontSizeValueLabel?.text = "\(Int(rounded))pt"
+    translationFontPreviewLabel?.font = .systemFont(ofSize: rounded, weight: .regular)
+  }
+
+  @objc private func clipPrefetchStepperChanged(_ sender: UIStepper) {
+    let value = Int(sender.value)
+    MSRSAppSettings.clipPrefetchCount = value
+    clipPrefetchValueLabel?.text = "\(value)"
   }
 
   @objc private func pushNowTapped() {
@@ -219,7 +263,9 @@ extension SettingsVC: UITableViewDataSource {
     guard let s = Section(rawValue: section) else { return 0 }
     switch s {
     case .sync: return 4
+    case .autoFlip: return MSRSAppSettings.autoFlipEnabled ? 2 : 1
     case .autoPass: return MSRSAppSettings.autoPassEnabled ? 2 : 1
+    case .reviewFontSize: return 2
     default: return 1
     }
   }
@@ -232,7 +278,10 @@ extension SettingsVC: UITableViewDataSource {
     case .srsReview: return "SRS Review"
     case .condensedMode: return "SRS Review Layout"
     case .buttonHeight: return "SRS Button Height"
+    case .reviewFontSize: return "SRS Review Font Size"
+    case .autoFlip: return "Auto-Flip to Back"
     case .autoPass: return "Auto-Pass"
+    case .clipPrefetch: return "Clip Prefetch"
     case .scheduling: return "SRS Scheduling"
     case .candidateFiltering: return "Candidate Filtering"
     case .studyTracking: return "Study Tracking"
@@ -254,8 +303,14 @@ extension SettingsVC: UITableViewDataSource {
       return "When enabled, the video fills the screen and all review UI floats on top with a gradient. Loop, speed, and other settings are available via a gear button. Dismiss review from the settings panel."
     case .buttonHeight:
       return "Height of the Show Back / Fail / Pass buttons during SRS review. Min \(Int(MSRSAppSettings.srsButtonHeightMin))pt, max \(Int(MSRSAppSettings.srsButtonHeightMax))pt."
+    case .reviewFontSize:
+      return "Font size for the Japanese transcript and English translation shown on the back of SRS review cards. Changes take effect on the next card."
+    case .autoFlip:
+      return "When enabled, after the audio plays through once, a countdown begins. When it reaches zero, the card automatically flips to show the back. Any tap while on the front cancels the auto-flip."
     case .autoPass:
-      return "When enabled, the card auto-passes after the countdown expires. You can still manually grade or tap Wait to cancel the auto-pass for that card."
+      return "When enabled, the card auto-passes after the countdown expires. You can still manually grade or tap anywhere to cancel the auto-pass for that card."
+    case .clipPrefetch:
+      return "Number of upcoming clips to download ahead of the current card during SRS review. Higher values reduce wait times but use more bandwidth. Set to 0 to disable prefetching."
     case .scheduling:
       return "Lower retention = longer intervals between reviews (more aggressive). Higher retention = shorter intervals (more conservative). Default is 90%. Takes effect on the next review of each card."
     case .candidateFiltering:
@@ -384,8 +439,53 @@ extension SettingsVC: UITableViewDataSource {
       ])
       return cell
 
+    case .reviewFontSize:
+      return buildReviewFontSizeCell(row: indexPath.row)
+
+    case .autoFlip:
+      return buildAutoFlipCell(row: indexPath.row)
+
     case .autoPass:
       return buildAutoPassCell(row: indexPath.row)
+
+    case .clipPrefetch:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = ""
+
+      let label = UILabel()
+      label.text = "Prefetch Count"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+      let valueLabel = UILabel()
+      valueLabel.text = "\(MSRSAppSettings.clipPrefetchCount)"
+      valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      valueLabel.textAlignment = .right
+      valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+      clipPrefetchValueLabel = valueLabel
+
+      let stepper = UIStepper()
+      stepper.minimumValue = Double(MSRSAppSettings.clipPrefetchCountMin)
+      stepper.maximumValue = Double(MSRSAppSettings.clipPrefetchCountMax)
+      stepper.stepValue = 1
+      stepper.value = Double(MSRSAppSettings.clipPrefetchCount)
+      stepper.addTarget(self, action: #selector(clipPrefetchStepperChanged(_:)), for: .valueChanged)
+      clipPrefetchStepper = stepper
+
+      let row = UIStackView(arrangedSubviews: [label, valueLabel, stepper])
+      row.axis = .horizontal
+      row.spacing = 12
+      row.alignment = .center
+      row.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(row)
+      NSLayoutConstraint.activate([
+        row.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        row.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        row.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        row.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+      ])
+      return cell
 
     case .scheduling:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
@@ -510,6 +610,167 @@ extension SettingsVC: UITableViewDataSource {
 
     case .sync:
       return buildSyncCell(row: indexPath.row)
+    }
+  }
+
+  private func buildReviewFontSizeCell(row: Int) -> UITableViewCell {
+    let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+    cell.selectionStyle = .none
+    cell.textLabel?.text = ""
+
+    switch row {
+    case 0:
+      let label = UILabel()
+      label.text = "Japanese Transcript"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.required, for: .horizontal)
+
+      let valueLabel = UILabel()
+      let currentSize = MSRSAppSettings.reviewTranscriptFontSize
+      valueLabel.text = "\(Int(currentSize))pt"
+      valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      valueLabel.textAlignment = .right
+      valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+      transcriptFontSizeValueLabel = valueLabel
+
+      let slider = UISlider()
+      slider.minimumValue = Float(MSRSAppSettings.reviewTranscriptFontSizeMin)
+      slider.maximumValue = Float(MSRSAppSettings.reviewTranscriptFontSizeMax)
+      slider.value = Float(currentSize)
+      slider.addTarget(self, action: #selector(transcriptFontSizeSliderChanged(_:)), for: .valueChanged)
+      transcriptFontSizeSlider = slider
+
+      let preview = UILabel()
+      preview.text = "日本語のプレビュー"
+      preview.font = .systemFont(ofSize: currentSize, weight: .regular)
+      preview.textColor = .label
+      preview.numberOfLines = 0
+      preview.textAlignment = .center
+      transcriptFontPreviewLabel = preview
+
+      let topRow = UIStackView(arrangedSubviews: [label, valueLabel])
+      topRow.axis = .horizontal
+      topRow.spacing = 8
+
+      let stack = UIStackView(arrangedSubviews: [topRow, slider, preview])
+      stack.axis = .vertical
+      stack.spacing = 8
+      stack.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(stack)
+      NSLayoutConstraint.activate([
+        stack.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        stack.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        stack.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        stack.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+      ])
+
+    case 1:
+      let label = UILabel()
+      label.text = "English Translation"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.required, for: .horizontal)
+
+      let valueLabel = UILabel()
+      let currentSize = MSRSAppSettings.reviewTranslationFontSize
+      valueLabel.text = "\(Int(currentSize))pt"
+      valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      valueLabel.textAlignment = .right
+      valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+      translationFontSizeValueLabel = valueLabel
+
+      let slider = UISlider()
+      slider.minimumValue = Float(MSRSAppSettings.reviewTranslationFontSizeMin)
+      slider.maximumValue = Float(MSRSAppSettings.reviewTranslationFontSizeMax)
+      slider.value = Float(currentSize)
+      slider.addTarget(self, action: #selector(translationFontSizeSliderChanged(_:)), for: .valueChanged)
+      translationFontSizeSlider = slider
+
+      let preview = UILabel()
+      preview.text = "English translation preview"
+      preview.font = .systemFont(ofSize: currentSize, weight: .regular)
+      preview.textColor = .secondaryLabel
+      preview.numberOfLines = 0
+      preview.textAlignment = .center
+      translationFontPreviewLabel = preview
+
+      let topRow = UIStackView(arrangedSubviews: [label, valueLabel])
+      topRow.axis = .horizontal
+      topRow.spacing = 8
+
+      let stack = UIStackView(arrangedSubviews: [topRow, slider, preview])
+      stack.axis = .vertical
+      stack.spacing = 8
+      stack.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(stack)
+      NSLayoutConstraint.activate([
+        stack.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        stack.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        stack.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        stack.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+      ])
+
+    default:
+      break
+    }
+
+    return cell
+  }
+
+  private func buildAutoFlipCell(row: Int) -> UITableViewCell {
+    switch row {
+    case 0:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.textLabel?.text = "Auto-Flip to Back"
+      cell.selectionStyle = .none
+      let toggle = UISwitch()
+      toggle.isOn = MSRSAppSettings.autoFlipEnabled
+      toggle.addTarget(self, action: #selector(autoFlipToggleChanged(_:)), for: .valueChanged)
+      cell.accessoryView = toggle
+      return cell
+
+    case 1:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = ""
+
+      let label = UILabel()
+      label.text = "Delay"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.required, for: .horizontal)
+
+      let valueLabel = UILabel()
+      valueLabel.text = String(format: "%.1fs", MSRSAppSettings.autoFlipDelay)
+      valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      valueLabel.textAlignment = .right
+      valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+      autoFlipDelayValueLabel = valueLabel
+
+      let slider = UISlider()
+      slider.minimumValue = Float(MSRSAppSettings.autoFlipDelayMin)
+      slider.maximumValue = Float(MSRSAppSettings.autoFlipDelayMax)
+      slider.value = Float(MSRSAppSettings.autoFlipDelay)
+      slider.addTarget(self, action: #selector(autoFlipDelaySliderChanged(_:)), for: .valueChanged)
+      autoFlipDelaySlider = slider
+
+      let topRow = UIStackView(arrangedSubviews: [label, valueLabel])
+      topRow.axis = .horizontal
+      topRow.spacing = 8
+
+      let stack = UIStackView(arrangedSubviews: [topRow, slider])
+      stack.axis = .vertical
+      stack.spacing = 8
+      stack.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(stack)
+      NSLayoutConstraint.activate([
+        stack.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        stack.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        stack.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        stack.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+      ])
+      return cell
+
+    default:
+      return UITableViewCell()
     }
   }
 

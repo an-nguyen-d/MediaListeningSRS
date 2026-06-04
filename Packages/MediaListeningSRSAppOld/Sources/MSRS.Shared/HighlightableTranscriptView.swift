@@ -32,15 +32,11 @@ public final class HighlightableTranscriptView: UITextView {
     didSet { renderCurrent() }
   }
 
-  public var highlightFillColor: UIColor = UIColor.systemYellow.withAlphaComponent(0.18)
-  public var highlightBorderColor: UIColor = UIColor.systemOrange
-  public var knownHighlightFillColor: UIColor = UIColor.systemGreen.withAlphaComponent(0.20)
-  public var knownHighlightBorderColor: UIColor = UIColor.systemGreen
-  public var selectedHighlightFillColor: UIColor = UIColor.systemBlue.withAlphaComponent(0.32)
-  public var selectedHighlightBorderColor: UIColor = UIColor.systemBlue
-  public var highlightBorderWidth: CGFloat = 1.5
-  public var highlightCornerRadius: CGFloat = 6
-  public var highlightInset: CGFloat = -2
+  public var highlightColor: UIColor = .systemOrange
+  public var knownHighlightColor: UIColor = .systemGreen
+  public var selectedHighlightColor: UIColor = .systemBlue
+  public var underlineThickness: CGFloat = 2
+  public var underlineOffset: CGFloat = 2
 
   /// When non-nil, the matching range is drawn with the selected-highlight palette. Drives
   /// the "you tapped THIS word" visual feedback the dictionary popup is positioned against.
@@ -199,24 +195,32 @@ public final class HighlightableTranscriptView: UITextView {
         guard let self = self else { return }
         let adjustedRect = rect
           .offsetBy(dx: self.textContainerInset.left, dy: self.textContainerInset.top)
-          .insetBy(dx: self.highlightInset, dy: self.highlightInset)
+
+        let color: UIColor
+        let thickness: CGFloat
+        if isSelected {
+          color = self.selectedHighlightColor
+          thickness = self.underlineThickness + 1
+        } else if labeled.isFullyKnown {
+          color = self.knownHighlightColor
+          thickness = self.underlineThickness
+        } else {
+          color = self.highlightColor
+          thickness = self.underlineThickness
+        }
+
+        let inset: CGFloat = 2
+        let lineY = adjustedRect.maxY + self.underlineOffset
+        let linePath = UIBezierPath()
+        linePath.move(to: CGPoint(x: adjustedRect.minX + inset, y: lineY))
+        linePath.addLine(to: CGPoint(x: adjustedRect.maxX - inset, y: lineY))
 
         let shapeLayer = CAShapeLayer()
-        let path = UIBezierPath(roundedRect: adjustedRect, cornerRadius: self.highlightCornerRadius)
-        shapeLayer.path = path.cgPath
-        if isSelected {
-          shapeLayer.fillColor = self.selectedHighlightFillColor.cgColor
-          shapeLayer.strokeColor = self.selectedHighlightBorderColor.cgColor
-          shapeLayer.lineWidth = self.highlightBorderWidth + 1
-        } else if labeled.isFullyKnown {
-          shapeLayer.fillColor = self.knownHighlightFillColor.cgColor
-          shapeLayer.strokeColor = self.knownHighlightBorderColor.cgColor
-          shapeLayer.lineWidth = self.highlightBorderWidth
-        } else {
-          shapeLayer.fillColor = self.highlightFillColor.cgColor
-          shapeLayer.strokeColor = self.highlightBorderColor.cgColor
-          shapeLayer.lineWidth = self.highlightBorderWidth
-        }
+        shapeLayer.path = linePath.cgPath
+        shapeLayer.strokeColor = color.cgColor
+        shapeLayer.lineWidth = thickness
+        shapeLayer.fillColor = nil
+        shapeLayer.lineCap = .round
 
         self.layer.insertSublayer(shapeLayer, at: 0)
         self.highlightLayers.append(shapeLayer)
