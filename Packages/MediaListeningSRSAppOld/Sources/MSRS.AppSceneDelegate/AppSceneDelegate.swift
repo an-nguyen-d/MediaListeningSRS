@@ -31,14 +31,10 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
     migrateUserDefaultsToSQLiteIfNeeded()
     buildAndSetRootViewController(windowScene: windowScene)
 
-    createDailySnapshotIfNeeded()
-    backfillInflectionKeysIfNeeded()
-    backfillTranscriptCacheIfNeeded()
-    backfillClipUploadsIfNeeded()
-    backfillLabelRangesIfNeeded()
     startSyncListener()
     startPeriodicSyncTimer()
     observeAppLifecycleNotifications()
+    performInitialSyncThenMaintenance()
   }
 
   open func sceneDidBecomeActive(_ scene: UIScene) {
@@ -88,7 +84,6 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
   }
 
   private func handleAppDidBecomeActive() {
-    createDailySnapshotIfNeeded()
     performSyncCheck()
     startPeriodicSyncTimer()
   }
@@ -125,6 +120,61 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
       window.makeKeyAndVisible()
       self.window = window
     }
+  }
+
+  // MARK: - Startup maintenance
+
+  private var hasRunStartupMaintenance = false
+
+  private func performInitialSyncThenMaintenance() {
+    guard !isSyncOperationInProgress else { return }
+    isSyncOperationInProgress = true
+    SyncStatusTracker.status = .checking
+
+    dependencies.elixirSyncClient.checkSync { [weak self] result in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        SyncStatusTracker.lastSyncCheckDate = Date()
+        switch result {
+        case .failure(let error):
+          print("[ElixirSync] initial checkSync error: \(error)")
+          SyncStatusTracker.status = .error(error.localizedDescription)
+          self.isSyncOperationInProgress = false
+          self.runStartupMaintenanceOnce()
+        case .success(let response):
+          switch response.status {
+          case .inSync:
+            SyncStatusTracker.status = .inSync
+            self.isSyncOperationInProgress = false
+            self.runStartupMaintenanceOnce()
+          case .localNewer:
+            SyncStatusTracker.status = .localNewer
+            self.pushLocalChanges()
+            self.runStartupMaintenanceOnce()
+          case .remoteNewer(let date):
+            SyncStatusTracker.status = .inSync
+            self.isSyncOperationInProgress = false
+            self.runStartupMaintenanceOnce()
+            self.showRemoteNewerAlert(remoteDate: date)
+          case .diverged(let remote, let local):
+            SyncStatusTracker.status = .inSync
+            self.isSyncOperationInProgress = false
+            self.runStartupMaintenanceOnce()
+            self.showDivergedAlert(remoteDate: remote, localDate: local)
+          }
+        }
+      }
+    }
+  }
+
+  private func runStartupMaintenanceOnce() {
+    guard !hasRunStartupMaintenance else { return }
+    hasRunStartupMaintenance = true
+    createDailySnapshotIfNeeded()
+    backfillInflectionKeysIfNeeded()
+    backfillTranscriptCacheIfNeeded()
+    backfillClipUploadsIfNeeded()
+    backfillLabelRangesIfNeeded()
   }
 
   // MARK: - Sync
