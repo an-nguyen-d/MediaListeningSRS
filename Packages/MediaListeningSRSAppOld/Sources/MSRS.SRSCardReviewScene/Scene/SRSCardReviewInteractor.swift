@@ -1,17 +1,9 @@
 import Foundation
-import ElixirShared
 import IYO_DictionaryClient
 import IYO_DictionaryModels
 import IYO_DictionaryUIKit
 import IYO_JapaneseModels
 import IYO_JapaneseParserClient
-import JML_JMLDatabaseClient
-import JML_JMLSharedModels
-#if targetEnvironment(macCatalyst)
-import METG_METGDatabaseClient
-import METG_SharedModels
-#endif
-import MSRS_ClipExportService
 import MSRS_ClipStorageClient
 import MSRS_MediaListeningSRSDatabaseClient
 import MSRS_Shared
@@ -32,20 +24,6 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   private let japaneseParserClient: JapaneseParserClient
   private let exportedClipsDirectoryURL: URL
 
-  #if targetEnvironment(macCatalyst)
-  private let jmlDatabaseClient: JMLDatabaseClient
-  private let metgDatabaseClient: METGDatabaseClient
-  private let srtParserClient: SRTParserClient
-
-  private struct SourceCache {
-    let videoFileURL: URL
-    let subtitleSegmentsByIndex: [Int: SubtitleSegment]
-    let englishTranslationsByIndex: [Int: String]
-    let mwbtLabelsBySubtitleIndex: [Int: [JapaneseTermLabelModel]]
-  }
-  private var sourceCachesByID: [MediaSourceModel.ID: SourceCache] = [:]
-  #endif
-
   private static let batchSize = 5
   private static let prefetchCount = 2
 
@@ -58,30 +36,6 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   private var currentTranscriptText: String = ""
   private var currentEnglishTranslationText: String?
 
-  #if targetEnvironment(macCatalyst)
-  init(
-    presenter: SRSCardReviewPresenter,
-    clipStorageClient: ClipStorageClient,
-    mediaListeningSRSDatabaseClient: MediaListeningSRSDatabaseClient,
-    jmlDatabaseClient: JMLDatabaseClient,
-    metgDatabaseClient: METGDatabaseClient,
-    dictionaryClient: DictionaryClient,
-    japaneseParserClient: JapaneseParserClient,
-    srtParserClient: SRTParserClient,
-    exportedClipsDirectoryURL: URL
-  ) {
-    self.presenter = presenter
-    self.clipStorageClient = clipStorageClient
-    self.mediaListeningSRSDatabaseClient = mediaListeningSRSDatabaseClient
-    self.jmlDatabaseClient = jmlDatabaseClient
-    self.metgDatabaseClient = metgDatabaseClient
-    self.dictionaryClient = dictionaryClient
-    self.japaneseParserClient = japaneseParserClient
-    self.srtParserClient = srtParserClient
-    self.exportedClipsDirectoryURL = exportedClipsDirectoryURL
-    self.studySessionTracker = StudySessionTracker(dbClient: mediaListeningSRSDatabaseClient)
-  }
-  #else
   init(
     presenter: SRSCardReviewPresenter,
     clipStorageClient: ClipStorageClient,
@@ -98,7 +52,6 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     self.exportedClipsDirectoryURL = exportedClipsDirectoryURL
     self.studySessionTracker = StudySessionTracker(dbClient: mediaListeningSRSDatabaseClient)
   }
-  #endif
 
   func sendAction(_ action: SRSCardReviewModels.Action) {
     switch action {
@@ -269,66 +222,25 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
         .init(cardID: card.id)
       )
 
-      #if targetEnvironment(macCatalyst)
-      do {
-        let cache = try await self.ensureSourceCache(mediaSourceID: card.mediaSourceID)
-        let termLinksResp = try await mediaListeningSRSDatabaseClient.srsCard.fetchTermLinksForCard(
-          .init(cardID: card.id)
-        )
-        var inflectionKeysByTermID: [Int64: String] = [:]
-        for link in termLinksResp.termLinks {
-          inflectionKeysByTermID[link.japaneseTermID] = link.inflectionKey
-        }
-        let transcriptText = card.cachedTranscriptText
-        let translationText = card.cachedEnglishTranslation.isEmpty ? nil : card.cachedEnglishTranslation
-
-        var labeledRanges: [HighlightableTranscriptLabeledRange] = []
-        var runningUTF16Offset: Int = 0
-        for index in card.subtitleIndexStart...card.subtitleIndexEnd {
-          guard let seg = cache.subtitleSegmentsByIndex[index] else { continue }
-          let text = seg.text
-          let textUTF16Length = text.utf16.count
-          for label in cache.mwbtLabelsBySubtitleIndex[index] ?? [] {
-            let length = label.range.upperBound - label.range.lowerBound
-            guard label.range.lowerBound >= 0,
-                  label.range.lowerBound + length <= textUTF16Length else { continue }
-            let termIDValue = label.japaneseTermID.rawValue
-            labeledRanges.append(.init(
-              range: NSRange(
-                location: runningUTF16Offset + label.range.lowerBound,
-                length: length
-              ),
-              termID: termIDValue,
-              isFullyKnown: fullyKnownTermIDs.contains(termIDValue),
-              inflectionKey: inflectionKeysByTermID[termIDValue] ?? ""
-            ))
-          }
-          runningUTF16Offset += textUTF16Length
-          if index < card.subtitleIndexEnd {
-            runningUTF16Offset += 1
-          }
-        }
-
-        await MainActor.run {
-          self.buildAndPresent(
-            card: card,
-            transcriptText: transcriptText,
-            translationText: translationText,
-            labeledRanges: labeledRanges,
-            failIntervalSeconds: intervals?.failIntervalSeconds,
-            passIntervalSeconds: intervals?.passIntervalSeconds
-          )
-        }
-      } catch {
-        await MainActor.run {
-          self.presenter.presentError("Failed to load source data: \(error.localizedDescription)")
-        }
-      }
-
-      #else
       let transcriptText = card.cachedTranscriptText
       let translationText = card.cachedEnglishTranslation.isEmpty ? nil : card.cachedEnglishTranslation
 
+      // Load fully-known state for terms in this card's label ranges
+      let termIDs = Set(card.cachedLabelRanges.map(\.termID))
+      if !termIDs.isEmpty {
+        let knownResp = try? await mediaListeningSRSDatabaseClient.japaneseTerm.fetchFullyKnownTermIDs(
+          .init(japaneseTermIDs: Array(termIDs))
+        )
+        if let knownIDs = knownResp?.fullyKnownTermIDs {
+          await MainActor.run { self.fullyKnownTermIDs.formUnion(knownIDs) }
+        }
+      }
+
+      let labeledRanges = card.cachedLabelRanges.toHighlightableRanges(
+        fullyKnownTermIDs: self.fullyKnownTermIDs
+      )
+
+      #if !targetEnvironment(macCatalyst)
       let clipFileURL = exportedClipsDirectoryURL.appendingPathComponent(card.clipRelativeFilePath)
       if !FileManager.default.fileExists(atPath: clipFileURL.path) {
         await MainActor.run { self.presenter.presentClipDownloading() }
@@ -352,19 +264,21 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
           localFileURL: thumbnailURL
         ))
       }
+      #endif
 
       await MainActor.run {
         self.buildAndPresent(
           card: card,
           transcriptText: transcriptText,
           translationText: translationText,
-          labeledRanges: [],
+          labeledRanges: labeledRanges,
           failIntervalSeconds: intervals?.failIntervalSeconds,
           passIntervalSeconds: intervals?.passIntervalSeconds
         )
+        #if !targetEnvironment(macCatalyst)
         self.prefetchUpcomingCards()
+        #endif
       }
-      #endif
     }
   }
 
@@ -527,86 +441,4 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       try? await mediaListeningSRSDatabaseClient.appSettings.update(.init(model: model))
     }
   }
-
-  // MARK: - Mac Catalyst source cache
-
-  #if targetEnvironment(macCatalyst)
-  private func ensureSourceCache(mediaSourceID: MediaSourceModel.ID) async throws -> SourceCache {
-    if let cached = sourceCachesByID[mediaSourceID] { return cached }
-    let sourceResp = try await mediaListeningSRSDatabaseClient.mediaSource.fetch(.init(id: mediaSourceID))
-    let resolved = try await Self.resolveURLs(
-      for: sourceResp.model.jmlMediaReference,
-      jmlDatabaseClient: jmlDatabaseClient
-    )
-    let srtContent = try String(contentsOf: resolved.subtitleURL, encoding: .utf8)
-    let segments = srtParserClient.parse(.init(content: srtContent))
-    let segmentsByIndex = Dictionary(uniqueKeysWithValues: segments.map { ($0.index.rawValue, $0) })
-    let translationsByIndex = Self.loadEnglishTranslationsIfPresent(subtitleURL: resolved.subtitleURL)
-    let mwbtResp = try await metgDatabaseClient.mediaSubtitlesList.fetchByFileIDs(
-      .init(fileIDs: [resolved.subtitleLocalizedLocalFileID])
-    )
-    var labelsBySubtitleIndex: [Int: [JapaneseTermLabelModel]] = [:]
-    if let row = mwbtResp.subtitles.first {
-      for label in row.labels {
-        labelsBySubtitleIndex[label.subtitleIndex.rawValue, default: []].append(label)
-      }
-    }
-
-    let cache = SourceCache(
-      videoFileURL: resolved.videoURL,
-      subtitleSegmentsByIndex: segmentsByIndex,
-      englishTranslationsByIndex: translationsByIndex,
-      mwbtLabelsBySubtitleIndex: labelsBySubtitleIndex
-    )
-
-    let allTermIDs = Set(labelsBySubtitleIndex.values.flatMap { $0 }.map { $0.japaneseTermID.rawValue })
-    let knownResp = try await mediaListeningSRSDatabaseClient.japaneseTerm.fetchFullyKnownTermIDs(
-      .init(japaneseTermIDs: Array(allTermIDs))
-    )
-
-    await MainActor.run {
-      self.sourceCachesByID[mediaSourceID] = cache
-      self.fullyKnownTermIDs.formUnion(knownResp.fullyKnownTermIDs)
-    }
-    return cache
-  }
-
-  private static func resolveURLs(
-    for reference: MediaSourceModel.JMLMediaReference,
-    jmlDatabaseClient: JMLDatabaseClient
-  ) async throws -> (videoURL: URL, subtitleURL: URL, subtitleLocalizedLocalFileID: LocalizedLocalFileModel.ID) {
-    switch reference {
-    case .movie(let movieID):
-      guard let movie = try await jmlDatabaseClient.movie.fetch(.init(id: movieID)),
-            let videoURL = movie.japaneseVideoLocalURL,
-            let subtitleFile = movie.japaneseSubtitleFile else {
-        throw NSError(domain: "SRSCardReview", code: 1, userInfo: [NSLocalizedDescriptionKey: "Movie URLs missing"])
-      }
-      return (videoURL, subtitleFile.url, subtitleFile.id)
-    case .episode(let episodeID):
-      guard let episode = try await jmlDatabaseClient.tvShowEpisode.fetch(.init(id: episodeID)),
-            let videoURL = episode.japaneseVideoLocalURL,
-            let subtitleFile = episode.japaneseSubtitleFile else {
-        throw NSError(domain: "SRSCardReview", code: 1, userInfo: [NSLocalizedDescriptionKey: "Episode URLs missing"])
-      }
-      return (videoURL, subtitleFile.url, subtitleFile.id)
-    }
-  }
-
-  private static func loadEnglishTranslationsIfPresent(subtitleURL: URL) -> [Int: String] {
-    let base = subtitleURL.deletingPathExtension().path
-    let candidatePath = "\(base)-translation_en-gpt5mini.json"
-    let candidateURL = URL(fileURLWithPath: candidatePath)
-    guard FileManager.default.fileExists(atPath: candidateURL.path),
-          let data = try? Data(contentsOf: candidateURL),
-          let stringMap = try? JSONDecoder().decode([String: String].self, from: data) else {
-      return [:]
-    }
-    var result: [Int: String] = [:]
-    for (key, value) in stringMap {
-      if let intKey = Int(key) { result[intKey] = value }
-    }
-    return result
-  }
-  #endif
 }

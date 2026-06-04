@@ -1,12 +1,7 @@
 import Foundation
-import ElixirShared
 import IYO_DictionaryClient
 import IYO_DictionaryUIKit
 import IYO_JapaneseParserClient
-import JML_JMLDatabaseClient
-#if targetEnvironment(macCatalyst)
-import METG_METGDatabaseClient
-#endif
 import MSRS_ClipExportService
 import MSRS_ClipStorageClient
 import MSRS_MediaListeningSRSDatabaseClient
@@ -15,22 +10,11 @@ import MSRS_SharedModels
 
 public enum SRSCardReviewModels {
 
-  #if targetEnvironment(macCatalyst)
-  public typealias Dependencies = HasClipStorageClient
-                                & HasDictionaryClient
-                                & HasExportedClipsDirectoryURL
-                                & HasJapaneseParserClient
-                                & HasJMLDatabaseClient
-                                & HasMediaListeningSRSDatabaseClient
-                                & HasMETGDatabaseClient
-                                & HasSRTParserClient
-  #else
   public typealias Dependencies = HasClipStorageClient
                                 & HasDictionaryClient
                                 & HasExportedClipsDirectoryURL
                                 & HasJapaneseParserClient
                                 & HasMediaListeningSRSDatabaseClient
-  #endif
 
   public enum Action {
     case viewDidLoad

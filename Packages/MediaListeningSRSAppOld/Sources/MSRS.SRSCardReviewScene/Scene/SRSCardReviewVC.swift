@@ -10,19 +10,6 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
 
   public init(dependencies: SRSCardReviewModels.Dependencies) {
     let presenter = SRSCardReviewPresenter()
-    #if targetEnvironment(macCatalyst)
-    self.interactor = SRSCardReviewInteractor(
-      presenter: presenter,
-      clipStorageClient: dependencies.clipStorageClient,
-      mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
-      jmlDatabaseClient: dependencies.jmlDatabaseClient,
-      metgDatabaseClient: dependencies.metgDatabaseClient,
-      dictionaryClient: dependencies.dictionaryClient,
-      japaneseParserClient: dependencies.japaneseParserClient,
-      srtParserClient: dependencies.srtParserClient,
-      exportedClipsDirectoryURL: dependencies.exportedClipsDirectoryURL
-    )
-    #else
     self.interactor = SRSCardReviewInteractor(
       presenter: presenter,
       clipStorageClient: dependencies.clipStorageClient,
@@ -31,7 +18,6 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
       japaneseParserClient: dependencies.japaneseParserClient,
       exportedClipsDirectoryURL: dependencies.exportedClipsDirectoryURL
     )
-    #endif
     super.init(nibName: nil, bundle: nil)
     presenter.displayer = self
   }

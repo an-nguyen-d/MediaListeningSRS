@@ -26,7 +26,8 @@ extension MediaListeningSRSDatabaseClient {
             clipEndTimeSeconds: request.clipEndTimeSeconds,
             clipRelativeFilePath: request.clipRelativeFilePath,
             cachedTranscriptText: request.cachedTranscriptText,
-            cachedEnglishTranslation: request.cachedEnglishTranslation
+            cachedEnglishTranslation: request.cachedEnglishTranslation,
+            cachedLabelRangesJSON: SRSCardLabelRange.encodeToJSON(request.labelRanges)
           )
           try record.insert(db)
           guard let cardID = record.id else {
@@ -320,7 +321,7 @@ extension MediaListeningSRSDatabaseClient {
         try await databaseWriter.write { db in
           var count = 0
           for update in request.updates {
-            let rowsUpdated = try db.execute(sql: """
+            try db.execute(sql: """
               UPDATE srsCardRecord
               SET cachedTranscriptText = ?, cachedEnglishTranslation = ?, lastUpdatedAt = ?
               WHERE id = ?
@@ -333,6 +334,32 @@ extension MediaListeningSRSDatabaseClient {
             count += db.changesCount
           }
           return .init(updatedCount: count)
+        }
+      },
+      batchUpdateCachedLabelRanges: { request in
+        try await databaseWriter.write { db in
+          var count = 0
+          for update in request.updates {
+            try db.execute(sql: """
+              UPDATE srsCardRecord
+              SET cachedLabelRangesJSON = ?, lastUpdatedAt = ?
+              WHERE id = ?
+            """, arguments: [
+              update.labelRangesJSON,
+              Date(),
+              update.cardID.rawValue
+            ])
+            count += db.changesCount
+          }
+          return .init(updatedCount: count)
+        }
+      },
+      fetchAllCards: { _ in
+        try await databaseWriter.read { db in
+          let records = try SRSCardRecord.fetchAll(db, sql: """
+            SELECT * FROM srsCardRecord ORDER BY createdAt ASC
+          """)
+          return .init(cards: records.map { GRDBMapper.SRSCard.mapToModel(from: $0) })
         }
       }
     )

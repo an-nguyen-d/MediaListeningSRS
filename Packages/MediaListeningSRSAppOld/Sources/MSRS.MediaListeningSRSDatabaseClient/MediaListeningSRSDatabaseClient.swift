@@ -195,6 +195,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
         public let cachedTranscriptText: String
         public let cachedEnglishTranslation: String
         public let japaneseTermLinks: [TermInflectionPair]
+        public let labelRanges: [SRSCardLabelRange]
 
         public init(
           mediaSourceID: MediaSourceModel.ID,
@@ -205,7 +206,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
           clipRelativeFilePath: String,
           cachedTranscriptText: String,
           cachedEnglishTranslation: String,
-          japaneseTermLinks: [TermInflectionPair]
+          japaneseTermLinks: [TermInflectionPair],
+          labelRanges: [SRSCardLabelRange] = []
         ) {
           self.mediaSourceID = mediaSourceID
           self.subtitleIndexStart = subtitleIndexStart
@@ -216,6 +218,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
           self.cachedTranscriptText = cachedTranscriptText
           self.cachedEnglishTranslation = cachedEnglishTranslation
           self.japaneseTermLinks = japaneseTermLinks
+          self.labelRanges = labelRanges
         }
       }
       public struct Response: Sendable, Equatable {
@@ -391,6 +394,37 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
 
     public var batchUpdateCachedTranscripts: @Sendable (BatchUpdateCachedTranscripts.Request) async throws -> BatchUpdateCachedTranscripts.Response
 
+    public enum BatchUpdateCachedLabelRanges {
+      public struct CardLabelRangesData: Sendable {
+        public let cardID: SRSCardModel.ID
+        public let labelRangesJSON: String
+        public init(cardID: SRSCardModel.ID, labelRangesJSON: String) {
+          self.cardID = cardID
+          self.labelRangesJSON = labelRangesJSON
+        }
+      }
+      public struct Request: Sendable {
+        public let updates: [CardLabelRangesData]
+        public init(updates: [CardLabelRangesData]) { self.updates = updates }
+      }
+      public struct Response: Sendable, Equatable {
+        public let updatedCount: Int
+        public init(updatedCount: Int) { self.updatedCount = updatedCount }
+      }
+    }
+
+    public var batchUpdateCachedLabelRanges: @Sendable (BatchUpdateCachedLabelRanges.Request) async throws -> BatchUpdateCachedLabelRanges.Response
+
+    public enum FetchAllCards {
+      public struct Request: Sendable { public init() {} }
+      public struct Response: Sendable, Equatable {
+        public let cards: [SRSCardModel]
+        public init(cards: [SRSCardModel]) { self.cards = cards }
+      }
+    }
+
+    public var fetchAllCards: @Sendable (FetchAllCards.Request) async throws -> FetchAllCards.Response
+
     public init(
       create: @Sendable @escaping (Create.Request) async throws -> Create.Response,
       delete: @Sendable @escaping (Delete.Request) async throws -> Delete.Response,
@@ -403,7 +437,9 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       updateClipPath: @Sendable @escaping (UpdateClipPath.Request) async throws -> UpdateClipPath.Response,
       previewNextIntervals: @Sendable @escaping (PreviewNextIntervals.Request) async throws -> PreviewNextIntervals.Response,
       fetchTermLinksForCard: @Sendable @escaping (FetchTermLinksForCard.Request) async throws -> FetchTermLinksForCard.Response,
-      batchUpdateCachedTranscripts: @Sendable @escaping (BatchUpdateCachedTranscripts.Request) async throws -> BatchUpdateCachedTranscripts.Response
+      batchUpdateCachedTranscripts: @Sendable @escaping (BatchUpdateCachedTranscripts.Request) async throws -> BatchUpdateCachedTranscripts.Response,
+      batchUpdateCachedLabelRanges: @Sendable @escaping (BatchUpdateCachedLabelRanges.Request) async throws -> BatchUpdateCachedLabelRanges.Response,
+      fetchAllCards: @Sendable @escaping (FetchAllCards.Request) async throws -> FetchAllCards.Response
     ) {
       self.create = create
       self.delete = delete
@@ -417,6 +453,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       self.previewNextIntervals = previewNextIntervals
       self.fetchTermLinksForCard = fetchTermLinksForCard
       self.batchUpdateCachedTranscripts = batchUpdateCachedTranscripts
+      self.batchUpdateCachedLabelRanges = batchUpdateCachedLabelRanges
+      self.fetchAllCards = fetchAllCards
     }
   }
   public var srsCard: SRSCard

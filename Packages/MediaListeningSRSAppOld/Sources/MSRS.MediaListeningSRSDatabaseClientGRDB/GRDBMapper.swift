@@ -1,4 +1,5 @@
 import Foundation
+import MSRS_Shared
 import MSRS_SharedModels
 import JML_JMLSharedModels
 
@@ -86,6 +87,7 @@ internal enum GRDBMapper {
         clipRelativeFilePath: record.clipRelativeFilePath,
         cachedTranscriptText: record.cachedTranscriptText,
         cachedEnglishTranslation: record.cachedEnglishTranslation,
+        cachedLabelRanges: SRSCardLabelRange.decodeFromJSON(record.cachedLabelRangesJSON),
         frontVideoVisibility: SRSCardModel.FrontVideoVisibility(rawValue: record.frontVideoVisibilityRawValue) ?? .blackScreen,
         playbackSpeed: record.playbackSpeed,
         consecutiveCorrectAtCurrentSpeed: record.consecutiveCorrectAtCurrentSpeed

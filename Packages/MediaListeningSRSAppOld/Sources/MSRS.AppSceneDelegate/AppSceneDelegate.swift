@@ -35,6 +35,7 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
     backfillInflectionKeysIfNeeded()
     backfillTranscriptCacheIfNeeded()
     backfillClipUploadsIfNeeded()
+    backfillLabelRangesIfNeeded()
     startSyncListener()
     startPeriodicSyncTimer()
     observeAppLifecycleNotifications()
@@ -398,6 +399,19 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
       await ClipUploadBackfillService.backfillIfNeeded(
         clipStorageClient: dependencies.clipStorageClient,
         exportedClipsDirectoryURL: dependencies.exportedClipsDirectoryURL
+      )
+    }
+    #endif
+  }
+
+  private func backfillLabelRangesIfNeeded() {
+    #if targetEnvironment(macCatalyst)
+    Task {
+      await LabelRangeBackfillService.backfillIfNeeded(
+        mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
+        jmlDatabaseClient: dependencies.jmlDatabaseClient,
+        metgDatabaseClient: dependencies.metgDatabaseClient,
+        srtParserClient: dependencies.srtParserClient
       )
     }
     #endif

@@ -312,13 +312,9 @@ enum PackageTarget: String, CaseIterable {
           .Shared,
           .SharedModels
         ) + [
-          PackageDependency.ElixirShared.Product.ElixirShared.targetDependency,
-          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
-          PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
-          PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
-          PackageDependency.MediaWordBankTagger.Product.SharedModels.targetDependency,
           PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
           PackageDependency.iYomi.Product.DictionaryModels.targetDependency,
+          PackageDependency.iYomi.Product.DictionaryUIKit.targetDependency,
           PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
           PackageDependency.iYomi.Product.JapaneseModels.targetDependency,
         ]

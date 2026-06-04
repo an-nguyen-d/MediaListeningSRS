@@ -1,4 +1,5 @@
 import Foundation
+import MSRS_Shared
 import Tagged
 
 public struct SRSCardModel: Identifiable, Sendable, Equatable {
@@ -37,6 +38,8 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
   public let cachedTranscriptText: String
   public let cachedEnglishTranslation: String
 
+  public let cachedLabelRanges: [SRSCardLabelRange]
+
   public var frontVideoVisibility: FrontVideoVisibility
   public var playbackSpeed: Double
   public var consecutiveCorrectAtCurrentSpeed: Int
@@ -53,6 +56,7 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     clipRelativeFilePath: String,
     cachedTranscriptText: String = "",
     cachedEnglishTranslation: String = "",
+    cachedLabelRanges: [SRSCardLabelRange] = [],
     frontVideoVisibility: FrontVideoVisibility = .blackScreen,
     playbackSpeed: Double = 1.0,
     consecutiveCorrectAtCurrentSpeed: Int = 0
@@ -68,6 +72,7 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     self.clipRelativeFilePath = clipRelativeFilePath
     self.cachedTranscriptText = cachedTranscriptText
     self.cachedEnglishTranslation = cachedEnglishTranslation
+    self.cachedLabelRanges = cachedLabelRanges
     self.frontVideoVisibility = frontVideoVisibility
     self.playbackSpeed = playbackSpeed
     self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed

@@ -344,6 +344,12 @@ extension MediaListeningSRSDatabaseClient {
       }
     }
 
+    migrator.registerMigration("11") { db in
+      try db.alter(table: "srsCardRecord") { t in
+        t.add(column: "cachedLabelRangesJSON", .text).notNull().defaults(to: "")
+      }
+    }
+
     return migrator
   }
 }

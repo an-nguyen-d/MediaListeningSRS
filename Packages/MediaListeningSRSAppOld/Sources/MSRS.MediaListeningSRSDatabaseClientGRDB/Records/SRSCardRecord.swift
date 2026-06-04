@@ -25,6 +25,7 @@ public struct SRSCardRecord: Codable, FetchableRecord, MutablePersistableRecord,
   // MARK: - Cached transcript (populated at card creation; backfilled for older cards on Mac)
   public var cachedTranscriptText: String = ""
   public var cachedEnglishTranslation: String = ""
+  public var cachedLabelRangesJSON: String = ""
 
   // MARK: - Card type (reserved for future review modes — only listening = 1 for now)
   public var cardType: Int = 1

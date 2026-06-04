@@ -305,6 +305,27 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
     let translationParts = (startIndex...endIndex).compactMap { englishTranslationsByIndex[$0] }
     let translationText = translationParts.joined(separator: "\n")
 
+    var subtitleTextsByIndex: [Int: String] = [:]
+    var labelInputsByIndex: [Int: [SRSCardLabelRange.SubtitleLabelInput]] = [:]
+    for index in startIndex...endIndex {
+      guard let seg = subtitleSegmentsByIndex[index] else { continue }
+      subtitleTextsByIndex[index] = seg.text
+      labelInputsByIndex[index] = (labelsBySubtitleIndex[index] ?? []).map { label in
+        .init(
+          range: label.range,
+          termID: label.japaneseTermID.rawValue,
+          inflectionKey: termLinksBySubtitleIndex[index]?
+            .first(where: { $0.japaneseTermID == label.japaneseTermID.rawValue })?
+            .inflectionKey ?? ""
+        )
+      }
+    }
+    let labelRanges = SRSCardLabelRange.buildFromSubtitles(
+      indexRange: startIndex...endIndex,
+      subtitleTextsByIndex: subtitleTextsByIndex,
+      labelsByIndex: labelInputsByIndex
+    )
+
     let outputFileURL = exportedClipsDirectoryURL
       .appendingPathComponent("\(mediaSourceID.rawValue)", isDirectory: true)
       .appendingPathComponent("\(UUID().uuidString).mp4", isDirectory: false)
@@ -320,7 +341,8 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
           clipRelativeFilePath: "",
           cachedTranscriptText: transcriptText,
           cachedEnglishTranslation: translationText,
-          japaneseTermLinks: Array(japaneseTermLinks)
+          japaneseTermLinks: Array(japaneseTermLinks),
+          labelRanges: labelRanges
         ))
         let cardID = createResponse.model.id
 
@@ -391,37 +413,31 @@ final class CandidateDetailInteractor: CandidateDetailInteractorProtocol {
     let startSeg = subtitleSegmentsByIndex[startSubtitleIndex]
     let endSeg = subtitleSegmentsByIndex[endSubtitleIndex]
 
+    var subtitleTextsByIndex: [Int: String] = [:]
+    var labelInputsByIndex: [Int: [SRSCardLabelRange.SubtitleLabelInput]] = [:]
     var joinedParts: [String] = []
-    var labeledRanges: [HighlightableTranscriptLabeledRange] = []
-    var runningUTF16Offset: Int = 0
     for index in startSubtitleIndex...endSubtitleIndex {
       guard let seg = subtitleSegmentsByIndex[index] else { continue }
-      let text = seg.text
-      let textUTF16Length = text.utf16.count
-      for label in labelsBySubtitleIndex[index] ?? [] {
-        let length = label.range.upperBound - label.range.lowerBound
-        guard label.range.lowerBound >= 0,
-              label.range.lowerBound + length <= textUTF16Length else { continue }
-        let termIDValue = label.japaneseTermID.rawValue
-        labeledRanges.append(.init(
-          range: NSRange(
-            location: runningUTF16Offset + label.range.lowerBound,
-            length: length
-          ),
-          termID: termIDValue,
-          isFullyKnown: fullyKnownTermIDs.contains(termIDValue),
+      subtitleTextsByIndex[index] = seg.text
+      labelInputsByIndex[index] = (labelsBySubtitleIndex[index] ?? []).map { label in
+        .init(
+          range: label.range,
+          termID: label.japaneseTermID.rawValue,
           inflectionKey: termLinksBySubtitleIndex[index]?
-            .first(where: { $0.japaneseTermID == termIDValue })?
+            .first(where: { $0.japaneseTermID == label.japaneseTermID.rawValue })?
             .inflectionKey ?? ""
-        ))
+        )
       }
-      joinedParts.append(text)
-      runningUTF16Offset += textUTF16Length
-      if index < endSubtitleIndex {
-        runningUTF16Offset += 1
-      }
+      joinedParts.append(seg.text)
     }
     let joinedText = joinedParts.joined(separator: "\n")
+
+    let cardLabelRanges = SRSCardLabelRange.buildFromSubtitles(
+      indexRange: startSubtitleIndex...endSubtitleIndex,
+      subtitleTextsByIndex: subtitleTextsByIndex,
+      labelsByIndex: labelInputsByIndex
+    )
+    let labeledRanges = cardLabelRanges.toHighlightableRanges(fullyKnownTermIDs: fullyKnownTermIDs)
 
     let translationParts = (startSubtitleIndex...endSubtitleIndex)
       .compactMap { englishTranslationsByIndex[$0] }
