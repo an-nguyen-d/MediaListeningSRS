@@ -36,12 +36,25 @@ final class MediaSourcesListInteractor: MediaSourcesListInteractorProtocol {
     switch action {
     case .viewDidLoad:
       handleViewDidLoad()
+      refreshDueCardCount()
+    case .viewWillAppear:
+      refreshDueCardCount()
     case .addTapped:
       presenter.presentNavigateToImportPicker()
     case .reviewAllTapped:
       presenter.presentNavigateToReviewAll()
     case .rowTapped(let id):
       presenter.presentNavigateToProcessingQueue(mediaSourceID: id)
+    }
+  }
+
+  private func refreshDueCardCount() {
+    Task { [mediaListeningSRSDatabaseClient, presenter] in
+      let response = try? await mediaListeningSRSDatabaseClient.srsCard.countDueCards(
+        .init(asOf: Date())
+      )
+      let count = response?.count ?? 0
+      await MainActor.run { presenter.presentDueCardCount(count) }
     }
   }
 

@@ -48,7 +48,8 @@ public enum MSRSAppSettings {
     requireSkipOrMakeCardConfirmation: true,
     autoLoopVideo: false,
     llmGradingPrompt: "",
-    syncIntervalSeconds: syncIntervalSecondsDefault
+    syncIntervalSeconds: syncIntervalSecondsDefault,
+    candidatePlayDelay: candidatePlayDelayDefault
   )
 
   public static func loadFromModel(_ model: AppSettingsModel) {
@@ -84,9 +85,57 @@ public enum MSRSAppSettings {
     set { cached.studySessionInactivityTimeout = max(30, newValue) }
   }
 
+  private static let autoLoopVideoKey = "MSRS.autoLoopVideo"
+  private static let condensedReviewModeKey = "MSRS.condensedReviewMode"
+  private static let srsButtonHeightKey = "MSRS.srsButtonHeight"
+  private static let autoPassEnabledKey = "MSRS.autoPassEnabled"
+  private static let autoPassDelayKey = "MSRS.autoPassDelay"
+
+  public static let srsButtonHeightMin: CGFloat = 30
+  public static let srsButtonHeightMax: CGFloat = 240
+  public static let srsButtonHeightDefault: CGFloat = 60
+
   public static var autoLoopVideo: Bool {
-    get { cached.autoLoopVideo }
-    set { cached.autoLoopVideo = newValue }
+    get { UserDefaults.standard.bool(forKey: autoLoopVideoKey) }
+    set { UserDefaults.standard.set(newValue, forKey: autoLoopVideoKey) }
+  }
+
+  public static var condensedReviewMode: Bool {
+    get { UserDefaults.standard.bool(forKey: condensedReviewModeKey) }
+    set { UserDefaults.standard.set(newValue, forKey: condensedReviewModeKey) }
+  }
+
+  public static var srsButtonHeight: CGFloat {
+    get {
+      let val = UserDefaults.standard.double(forKey: srsButtonHeightKey)
+      guard val > 0 else { return srsButtonHeightDefault }
+      return CGFloat(max(Double(srsButtonHeightMin), min(Double(srsButtonHeightMax), val)))
+    }
+    set {
+      let clamped = max(srsButtonHeightMin, min(srsButtonHeightMax, newValue))
+      UserDefaults.standard.set(Double(clamped), forKey: srsButtonHeightKey)
+    }
+  }
+
+  public static let autoPassDelayMin: Double = 1
+  public static let autoPassDelayMax: Double = 10
+  public static let autoPassDelayDefault: Double = 5
+
+  public static var autoPassEnabled: Bool {
+    get { UserDefaults.standard.bool(forKey: autoPassEnabledKey) }
+    set { UserDefaults.standard.set(newValue, forKey: autoPassEnabledKey) }
+  }
+
+  public static var autoPassDelay: Double {
+    get {
+      let val = UserDefaults.standard.double(forKey: autoPassDelayKey)
+      guard val > 0 else { return autoPassDelayDefault }
+      return max(autoPassDelayMin, min(autoPassDelayMax, val))
+    }
+    set {
+      let clamped = max(autoPassDelayMin, min(autoPassDelayMax, newValue))
+      UserDefaults.standard.set(clamped, forKey: autoPassDelayKey)
+    }
   }
 
   public static var llmGradingPrompt: String {
@@ -99,5 +148,14 @@ public enum MSRSAppSettings {
   public static var syncIntervalSeconds: Int {
     get { max(10, cached.syncIntervalSeconds) }
     set { cached.syncIntervalSeconds = max(10, newValue) }
+  }
+
+  public static let candidatePlayDelayDefault: Double = 0
+  public static let candidatePlayDelayMin: Double = 0
+  public static let candidatePlayDelayMax: Double = 1
+
+  public static var candidatePlayDelay: Double {
+    get { max(candidatePlayDelayMin, min(candidatePlayDelayMax, cached.candidatePlayDelay)) }
+    set { cached.candidatePlayDelay = max(candidatePlayDelayMin, min(candidatePlayDelayMax, newValue)) }
   }
 }

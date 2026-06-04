@@ -350,6 +350,12 @@ extension MediaListeningSRSDatabaseClient {
       }
     }
 
+    migrator.registerMigration("12") { db in
+      try db.alter(table: "appSettingsRecord") { t in
+        t.add(column: "candidatePlayDelay", .double).notNull().defaults(to: 0)
+      }
+    }
+
     return migrator
   }
 }

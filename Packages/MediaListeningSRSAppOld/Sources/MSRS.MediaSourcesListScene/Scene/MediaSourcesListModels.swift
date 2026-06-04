@@ -17,6 +17,7 @@ public enum MediaSourcesListModels {
 
   public enum Action {
     case viewDidLoad
+    case viewWillAppear
     case addTapped
     case reviewAllTapped
     case rowTapped(MediaSourceModel.ID)

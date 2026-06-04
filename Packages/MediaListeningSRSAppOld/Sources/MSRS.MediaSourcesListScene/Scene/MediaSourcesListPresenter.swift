@@ -4,6 +4,7 @@ import MSRS_SharedModels
 @MainActor
 protocol MediaSourcesListDisplayer: AnyObject {
   func displayRows(_ rows: [MediaSourcesListModels.Row])
+  func displayDueCardCount(_ count: Int)
   func displayError(_ message: String)
   func displayNavigateToImportPicker()
   func displayNavigateToReviewAll()
@@ -25,6 +26,10 @@ final class MediaSourcesListPresenter {
 
   func presentNavigateToImportPicker() {
     displayer?.displayNavigateToImportPicker()
+  }
+
+  func presentDueCardCount(_ count: Int) {
+    displayer?.displayDueCardCount(count)
   }
 
   func presentNavigateToReviewAll() {

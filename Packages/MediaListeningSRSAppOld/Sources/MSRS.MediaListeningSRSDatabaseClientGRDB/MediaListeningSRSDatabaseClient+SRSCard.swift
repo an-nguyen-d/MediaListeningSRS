@@ -361,6 +361,16 @@ extension MediaListeningSRSDatabaseClient {
           """)
           return .init(cards: records.map { GRDBMapper.SRSCard.mapToModel(from: $0) })
         }
+      },
+      countDueCards: { request in
+        try await databaseWriter.read { db in
+          let count = try Int.fetchOne(db, sql: """
+            SELECT COUNT(*) FROM srsCardRecord
+            WHERE clipRelativeFilePath != ''
+              AND (dueDate IS NULL OR dueDate <= ?)
+          """, arguments: [request.asOf]) ?? 0
+          return .init(count: count)
+        }
       }
     )
   }

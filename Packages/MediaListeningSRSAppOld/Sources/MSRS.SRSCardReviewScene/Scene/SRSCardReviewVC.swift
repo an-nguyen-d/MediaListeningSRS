@@ -61,7 +61,12 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     contentView.onAutoLoopVideoChanged = { [weak self] isOn in
       self?.interactor.sendAction(.autoLoopVideoChanged(isOn))
     }
-    if navigationController?.presentingViewController != nil {
+    contentView.onDismissReview = { [weak self] in
+      self?.dismiss(animated: true)
+    }
+    if contentView.isCondensedMode {
+      navigationController?.setNavigationBarHidden(true, animated: false)
+    } else if navigationController?.presentingViewController != nil {
       navigationItem.leftBarButtonItem = UIBarButtonItem(
         barButtonSystemItem: .done,
         target: self,

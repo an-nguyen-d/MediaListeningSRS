@@ -51,6 +51,11 @@ public final class MediaSourcesListVC: UIViewController, MediaSourcesListDisplay
     interactor.sendAction(.viewDidLoad)
   }
 
+  public override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    interactor.sendAction(.viewWillAppear)
+  }
+
   @objc private func addTapped() {
     interactor.sendAction(.addTapped)
   }
@@ -68,6 +73,10 @@ public final class MediaSourcesListVC: UIViewController, MediaSourcesListDisplay
   }
 
   // MARK: - MediaSourcesListDisplayer
+
+  func displayDueCardCount(_ count: Int) {
+    navigationItem.leftBarButtonItem?.title = count > 0 ? "Review All (\(count))" : "Review All"
+  }
 
   func displayRows(_ rows: [MediaSourcesListModels.Row]) {
     contentView.setRows(rows)

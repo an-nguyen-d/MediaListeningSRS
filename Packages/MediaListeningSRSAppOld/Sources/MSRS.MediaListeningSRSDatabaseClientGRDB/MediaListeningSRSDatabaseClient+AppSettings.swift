@@ -31,6 +31,7 @@ extension MediaListeningSRSDatabaseClient {
           record.autoLoopVideo = request.model.autoLoopVideo
           record.llmGradingPrompt = request.model.llmGradingPrompt
           record.syncIntervalSeconds = request.model.syncIntervalSeconds
+          record.candidatePlayDelay = request.model.candidatePlayDelay
           try record.update(db)
           return .init()
         }
@@ -49,7 +50,8 @@ extension AppSettingsRecord {
       requireSkipOrMakeCardConfirmation: requireSkipOrMakeCardConfirmation,
       autoLoopVideo: autoLoopVideo,
       llmGradingPrompt: llmGradingPrompt,
-      syncIntervalSeconds: syncIntervalSeconds
+      syncIntervalSeconds: syncIntervalSeconds,
+      candidatePlayDelay: candidatePlayDelay
     )
   }
 }

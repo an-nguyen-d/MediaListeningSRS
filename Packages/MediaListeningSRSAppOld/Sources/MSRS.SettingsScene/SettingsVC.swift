@@ -5,6 +5,20 @@ import SYNC_ElixirSyncClient
 
 public final class SettingsVC: UIViewController {
 
+  private enum Section: Int, CaseIterable {
+    case processingQueue
+    case candidatePlayDelay
+    case srsReview
+    case condensedMode
+    case buttonHeight
+    case autoPass
+    case scheduling
+    case candidateFiltering
+    case studyTracking
+    case llmGrading
+    case sync
+  }
+
   private let mediaListeningSRSDatabaseClient: MediaListeningSRSDatabaseClient
   private let elixirSyncClient: ElixirSyncClient
   private let tableView = UITableView(frame: .zero, style: .insetGrouped)
@@ -14,6 +28,12 @@ public final class SettingsVC: UIViewController {
   private var inactivityTimeoutTextField: UITextField?
   private var syncIntervalTextField: UITextField?
   private var pushButton: UIButton?
+  private var buttonHeightSlider: UISlider?
+  private var buttonHeightValueLabel: UILabel?
+  private var autoPassDelaySlider: UISlider?
+  private var autoPassDelayValueLabel: UILabel?
+  private var candidatePlayDelaySlider: UISlider?
+  private var candidatePlayDelayValueLabel: UILabel?
 
   public init(
     mediaListeningSRSDatabaseClient: MediaListeningSRSDatabaseClient,
@@ -57,10 +77,8 @@ public final class SettingsVC: UIViewController {
 
   private func reloadSyncSection() {
     guard tableView.window != nil else { return }
-    tableView.reloadSections(IndexSet(integer: syncSection), with: .none)
+    tableView.reloadSections(IndexSet(integer: Section.sync.rawValue), with: .none)
   }
-
-  private let syncSection = 6
 
   private func persistSettings() {
     let model = MSRSAppSettings.currentModel()
@@ -110,6 +128,34 @@ public final class SettingsVC: UIViewController {
     let clamped = max(10, parsed)
     MSRSAppSettings.syncIntervalSeconds = clamped
     sender.text = "\(clamped)"
+    persistSettings()
+  }
+
+  @objc private func condensedModeToggleChanged(_ sender: UISwitch) {
+    MSRSAppSettings.condensedReviewMode = sender.isOn
+  }
+
+  @objc private func buttonHeightSliderChanged(_ sender: UISlider) {
+    let rounded = CGFloat(sender.value.rounded())
+    MSRSAppSettings.srsButtonHeight = rounded
+    buttonHeightValueLabel?.text = "\(Int(rounded))pt"
+  }
+
+  @objc private func autoPassToggleChanged(_ sender: UISwitch) {
+    MSRSAppSettings.autoPassEnabled = sender.isOn
+    tableView.reloadSections(IndexSet(integer: Section.autoPass.rawValue), with: .none)
+  }
+
+  @objc private func autoPassDelaySliderChanged(_ sender: UISlider) {
+    let rounded = (Double(sender.value) * 10).rounded() / 10
+    MSRSAppSettings.autoPassDelay = rounded
+    autoPassDelayValueLabel?.text = String(format: "%.1fs", rounded)
+  }
+
+  @objc private func candidatePlayDelaySliderChanged(_ sender: UISlider) {
+    let rounded = (Double(sender.value) * 100).rounded() / 100
+    MSRSAppSettings.candidatePlayDelay = rounded
+    candidatePlayDelayValueLabel?.text = String(format: "%.2fs", rounded)
     persistSettings()
   }
 
@@ -165,50 +211,68 @@ public final class SettingsVC: UIViewController {
 
 extension SettingsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 7 }
+  public func numberOfSections(in tableView: UITableView) -> Int {
+    Section.allCases.count
+  }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-    if section == syncSection { return 4 }
-    return 1
+    guard let s = Section(rawValue: section) else { return 0 }
+    switch s {
+    case .sync: return 4
+    case .autoPass: return MSRSAppSettings.autoPassEnabled ? 2 : 1
+    default: return 1
+    }
   }
 
   public func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-    switch section {
-    case 0: return "Processing Queue"
-    case 1: return "SRS Review"
-    case 2: return "SRS Scheduling"
-    case 3: return "Candidate Filtering"
-    case 4: return "Study Tracking"
-    case 5: return "LLM Grading"
-    case 6: return "Sync"
-    default: return nil
+    guard let s = Section(rawValue: section) else { return nil }
+    switch s {
+    case .processingQueue: return "Processing Queue"
+    case .candidatePlayDelay: return "Candidate Auto-Play Delay"
+    case .srsReview: return "SRS Review"
+    case .condensedMode: return "SRS Review Layout"
+    case .buttonHeight: return "SRS Button Height"
+    case .autoPass: return "Auto-Pass"
+    case .scheduling: return "SRS Scheduling"
+    case .candidateFiltering: return "Candidate Filtering"
+    case .studyTracking: return "Study Tracking"
+    case .llmGrading: return "LLM Grading"
+    case .sync: return "Sync"
     }
   }
 
   public func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-    switch section {
-    case 0:
+    guard let s = Section(rawValue: section) else { return nil }
+    switch s {
+    case .processingQueue:
       return "When enabled, a confirmation popup appears before skipping or making a card."
-    case 1:
+    case .candidatePlayDelay:
+      return "Delay before auto-playing the video when a new processing candidate is shown. Set to 0 for immediate playback. Does not affect SRS reviews."
+    case .srsReview:
       return "Show or hide the Japanese transcript reveal area on the front of SRS review cards."
-    case 2:
+    case .condensedMode:
+      return "When enabled, the video fills the screen and all review UI floats on top with a gradient. Loop, speed, and other settings are available via a gear button. Dismiss review from the settings panel."
+    case .buttonHeight:
+      return "Height of the Show Back / Fail / Pass buttons during SRS review. Min \(Int(MSRSAppSettings.srsButtonHeightMin))pt, max \(Int(MSRSAppSettings.srsButtonHeightMax))pt."
+    case .autoPass:
+      return "When enabled, the card auto-passes after the countdown expires. You can still manually grade or tap Wait to cancel the auto-pass for that card."
+    case .scheduling:
       return "Lower retention = longer intervals between reviews (more aggressive). Higher retention = shorter intervals (more conservative). Default is 90%. Takes effect on the next review of each card."
-    case 3:
+    case .candidateFiltering:
       return "Candidates where all tagged words are either known or already covered by this many cards will be auto-filtered from the processing queue. Only affects new imports and card creations going forward."
-    case 4:
+    case .studyTracking:
       return "If no review action occurs within this many seconds, the current study session ends. The next review action starts a new session. Default is 300 seconds (5 minutes)."
-    case 5:
+    case .llmGrading:
       return "System prompt sent to the local Ollama LLM when grading typed answers. Tap to edit. The Japanese transcript and English translation are appended automatically."
-    case 6:
+    case .sync:
       return "Sync interval: how often the app checks for changes (minimum 10s). Takes effect on next app launch or foreground."
-    default:
-      return nil
     }
   }
 
   public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-    switch indexPath.section {
-    case 0:
+    guard let section = Section(rawValue: indexPath.section) else { return UITableViewCell() }
+    switch section {
+    case .processingQueue:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
       cell.textLabel?.text = "Require Confirmation"
       cell.selectionStyle = .none
@@ -218,7 +282,48 @@ extension SettingsVC: UITableViewDataSource {
       cell.accessoryView = toggle
       return cell
 
-    case 1:
+    case .candidatePlayDelay:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = ""
+
+      let label = UILabel()
+      label.text = "Delay"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.required, for: .horizontal)
+
+      let valueLabel = UILabel()
+      valueLabel.text = String(format: "%.2fs", MSRSAppSettings.candidatePlayDelay)
+      valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      valueLabel.textAlignment = .right
+      valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+      candidatePlayDelayValueLabel = valueLabel
+
+      let slider = UISlider()
+      slider.minimumValue = Float(MSRSAppSettings.candidatePlayDelayMin)
+      slider.maximumValue = Float(MSRSAppSettings.candidatePlayDelayMax)
+      slider.value = Float(MSRSAppSettings.candidatePlayDelay)
+      slider.addTarget(self, action: #selector(candidatePlayDelaySliderChanged(_:)), for: .valueChanged)
+      candidatePlayDelaySlider = slider
+
+      let topRow = UIStackView(arrangedSubviews: [label, valueLabel])
+      topRow.axis = .horizontal
+      topRow.spacing = 8
+
+      let stack = UIStackView(arrangedSubviews: [topRow, slider])
+      stack.axis = .vertical
+      stack.spacing = 8
+      stack.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(stack)
+      NSLayoutConstraint.activate([
+        stack.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        stack.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        stack.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        stack.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+      ])
+      return cell
+
+    case .srsReview:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
       cell.textLabel?.text = "Show Front Transcript"
       cell.selectionStyle = .none
@@ -228,7 +333,61 @@ extension SettingsVC: UITableViewDataSource {
       cell.accessoryView = toggle
       return cell
 
-    case 2:
+    case .condensedMode:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.textLabel?.text = "Condensed Review Mode"
+      cell.selectionStyle = .none
+      let toggle = UISwitch()
+      toggle.isOn = MSRSAppSettings.condensedReviewMode
+      toggle.addTarget(self, action: #selector(condensedModeToggleChanged(_:)), for: .valueChanged)
+      cell.accessoryView = toggle
+      return cell
+
+    case .buttonHeight:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = ""
+
+      let label = UILabel()
+      label.text = "Button Height"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.required, for: .horizontal)
+
+      let valueLabel = UILabel()
+      valueLabel.text = "\(Int(MSRSAppSettings.srsButtonHeight))pt"
+      valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      valueLabel.textAlignment = .right
+      valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+      buttonHeightValueLabel = valueLabel
+
+      let slider = UISlider()
+      slider.minimumValue = Float(MSRSAppSettings.srsButtonHeightMin)
+      slider.maximumValue = Float(MSRSAppSettings.srsButtonHeightMax)
+      slider.value = Float(MSRSAppSettings.srsButtonHeight)
+      slider.addTarget(self, action: #selector(buttonHeightSliderChanged(_:)), for: .valueChanged)
+      buttonHeightSlider = slider
+
+      let topRow = UIStackView(arrangedSubviews: [label, valueLabel])
+      topRow.axis = .horizontal
+      topRow.spacing = 8
+
+      let stack = UIStackView(arrangedSubviews: [topRow, slider])
+      stack.axis = .vertical
+      stack.spacing = 8
+      stack.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(stack)
+      NSLayoutConstraint.activate([
+        stack.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        stack.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        stack.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        stack.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+      ])
+      return cell
+
+    case .autoPass:
+      return buildAutoPassCell(row: indexPath.row)
+
+    case .scheduling:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
       cell.selectionStyle = .none
       cell.textLabel?.text = ""
@@ -271,7 +430,7 @@ extension SettingsVC: UITableViewDataSource {
       ])
       return cell
 
-    case 3:
+    case .candidateFiltering:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
       cell.selectionStyle = .none
       cell.textLabel?.text = ""
@@ -305,7 +464,7 @@ extension SettingsVC: UITableViewDataSource {
       ])
       return cell
 
-    case 4:
+    case .studyTracking:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
       cell.selectionStyle = .none
       cell.textLabel?.text = ""
@@ -339,7 +498,7 @@ extension SettingsVC: UITableViewDataSource {
       ])
       return cell
 
-    case 5:
+    case .llmGrading:
       let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
       cell.textLabel?.text = "Grading Prompt"
       let prompt = MSRSAppSettings.llmGradingPrompt
@@ -349,8 +508,63 @@ extension SettingsVC: UITableViewDataSource {
       cell.accessoryType = .disclosureIndicator
       return cell
 
-    case syncSection:
+    case .sync:
       return buildSyncCell(row: indexPath.row)
+    }
+  }
+
+  private func buildAutoPassCell(row: Int) -> UITableViewCell {
+    switch row {
+    case 0:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.textLabel?.text = "Auto-Pass"
+      cell.selectionStyle = .none
+      let toggle = UISwitch()
+      toggle.isOn = MSRSAppSettings.autoPassEnabled
+      toggle.addTarget(self, action: #selector(autoPassToggleChanged(_:)), for: .valueChanged)
+      cell.accessoryView = toggle
+      return cell
+
+    case 1:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = ""
+
+      let label = UILabel()
+      label.text = "Delay"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.required, for: .horizontal)
+
+      let valueLabel = UILabel()
+      valueLabel.text = String(format: "%.1fs", MSRSAppSettings.autoPassDelay)
+      valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      valueLabel.textAlignment = .right
+      valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+      autoPassDelayValueLabel = valueLabel
+
+      let slider = UISlider()
+      slider.minimumValue = Float(MSRSAppSettings.autoPassDelayMin)
+      slider.maximumValue = Float(MSRSAppSettings.autoPassDelayMax)
+      slider.value = Float(MSRSAppSettings.autoPassDelay)
+      slider.addTarget(self, action: #selector(autoPassDelaySliderChanged(_:)), for: .valueChanged)
+      autoPassDelaySlider = slider
+
+      let topRow = UIStackView(arrangedSubviews: [label, valueLabel])
+      topRow.axis = .horizontal
+      topRow.spacing = 8
+
+      let stack = UIStackView(arrangedSubviews: [topRow, slider])
+      stack.axis = .vertical
+      stack.spacing = 8
+      stack.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(stack)
+      NSLayoutConstraint.activate([
+        stack.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        stack.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        stack.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        stack.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+      ])
+      return cell
 
     default:
       return UITableViewCell()
@@ -445,10 +659,11 @@ extension SettingsVC: UITableViewDataSource {
 extension SettingsVC: UITableViewDelegate {
   public func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
     tableView.deselectRow(at: indexPath, animated: true)
-    if indexPath.section == 5 {
+    guard let section = Section(rawValue: indexPath.section) else { return }
+    if section == .llmGrading {
       let editor = LLMPromptEditorVC(mediaListeningSRSDatabaseClient: mediaListeningSRSDatabaseClient)
       editor.onSave = { [weak self] in
-        self?.tableView.reloadSections(IndexSet(integer: 5), with: .none)
+        self?.tableView.reloadSections(IndexSet(integer: Section.llmGrading.rawValue), with: .none)
       }
       navigationController?.pushViewController(editor, animated: true)
     }

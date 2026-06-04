@@ -14,6 +14,9 @@ final class SRSCardReviewView: UIView {
   var onSubmitTypedAnswer: ((String) -> Void)?
   var onTranscriptTappedAtCharacterIndex: ((Int) -> Void)?
   var onAutoLoopVideoChanged: ((Bool) -> Void)?
+  var onDismissReview: (() -> Void)?
+
+  let isCondensedMode: Bool
 
   // MARK: - Common
 
@@ -26,13 +29,18 @@ final class SRSCardReviewView: UIView {
   private let blurOverlayView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
   private let blackMaskView = UIView()
 
-  // MARK: - Speed controls (shared creation, separate instances for front/back)
+  // MARK: - Speed controls
 
   private let frontSpeedRow = UIStackView()
   private let frontSpeedLabel = UILabel()
   private let backSpeedRow = UIStackView()
   private let backSpeedLabel = UILabel()
   private let backStreakLabel = UILabel()
+
+  // Settings panel speed controls (separate instances)
+  private let settingsSpeedRow = UIStackView()
+  private let settingsSpeedLabel = UILabel()
+  private let settingsStreakLabel = UILabel()
 
   // MARK: - Front
 
@@ -41,7 +49,6 @@ final class SRSCardReviewView: UIView {
   private let frontTranscriptRevealHint = UILabel()
   private let frontTranscriptLabel = UILabel()
   private let frontToggleButton = UIButton(type: .system)
-  private let frontPlayButton = UIButton(type: .system)
   private let frontLoopButton = UIButton(type: .system)
   private let frontShowBackButton = UIButton(type: .system)
   private let frontTypeAnswerButton = UIButton(type: .system)
@@ -57,7 +64,6 @@ final class SRSCardReviewView: UIView {
   private let backTranscriptView = HighlightableTranscriptView()
   private let backInflectionAnnotationsLabel = UILabel()
   private let backTranslationLabel = UILabel()
-  private let backPlayButton = UIButton(type: .system)
   private let backLoopButton = UIButton(type: .system)
   private let backFailButton = UIButton(type: .system)
   private let backPassButton = UIButton(type: .system)
@@ -70,6 +76,27 @@ final class SRSCardReviewView: UIView {
   private let llmLoadingLabel = UILabel()
   private let llmScoreLabel = UILabel()
   private let llmReasoningLabel = UILabel()
+
+  // MARK: - Condensed mode views
+
+  private let gradientView = GradientOverlayView()
+  private let condensedSettingsButton = UIButton(type: .system)
+  private let settingsPanel = UIView()
+  private let settingsLoopButton = UIButton(type: .system)
+  private let settingsToggleButton = UIButton(type: .system)
+  private let settingsDismissButton = UIButton(type: .system)
+  private let settingsHideButton = UIButton(type: .system)
+  private let buttonHeightSlider = UISlider()
+  private let buttonHeightValueLabel = UILabel()
+
+  // MARK: - Auto-pass
+
+  private let autoPassContainer = UIView()
+  private let autoPassProgressBar = UIView()
+  private let autoPassProgressFill = UIView()
+  private let autoPassLabel = UILabel()
+  private let autoPassCancelButton = UIButton(type: .system)
+  private var autoPassProgressWidthConstraint: NSLayoutConstraint?
 
   // MARK: - Other
 
@@ -94,17 +121,33 @@ final class SRSCardReviewView: UIView {
   private var currentVideoFileURL: URL?
   private var autoLoopWorkItem: DispatchWorkItem?
 
+  private var autoPassTimer: Timer?
+  private var autoPassStartDate: Date?
+  private var autoPassCancelled = false
+
+  private var buttonHeightConstraints: [NSLayoutConstraint] = []
+  private var videoStageAspectConstraint: NSLayoutConstraint?
+
   override init(frame: CGRect) {
+    isCondensedMode = MSRSAppSettings.condensedReviewMode
     super.init(frame: frame)
-    backgroundColor = .systemBackground
-    setUpPositionLabel()
+    backgroundColor = isCondensedMode ? .black : .systemBackground
     setUpVideoStage()
     setUpSpeedControls()
     setUpFront()
     setUpBack()
     setUpLLMResult()
     setUpEmptyLabel()
-    setUpLayout()
+    setUpAutoPass()
+    if isCondensedMode {
+      setUpCondensedOverlay()
+      setUpSettingsPanel()
+      setUpCondensedLayout()
+    } else {
+      setUpPositionLabel()
+      setUpStandardLayout()
+    }
+    applyButtonHeight(MSRSAppSettings.srsButtonHeight)
     showEmptyState(message: "Loading deck…")
   }
 
@@ -121,7 +164,6 @@ final class SRSCardReviewView: UIView {
     positionLabel.font = .preferredFont(forTextStyle: .footnote)
     positionLabel.textColor = .secondaryLabel
     positionLabel.textAlignment = .center
-    addSubview(positionLabel)
     positionLabel.translatesAutoresizingMaskIntoConstraints = false
   }
 
@@ -129,6 +171,9 @@ final class SRSCardReviewView: UIView {
     videoStageView.backgroundColor = .black
     videoStageView.clipsToBounds = true
     videoStageView.translatesAutoresizingMaskIntoConstraints = false
+
+    let tap = UITapGestureRecognizer(target: self, action: #selector(handleVideoTap))
+    videoStageView.addGestureRecognizer(tap)
 
     thumbnailImageView.contentMode = .scaleAspectFit
     thumbnailImageView.backgroundColor = .black
@@ -173,20 +218,30 @@ final class SRSCardReviewView: UIView {
     ])
 
     #if targetEnvironment(macCatalyst)
-    videoStageView.heightAnchor.constraint(equalToConstant: 360).isActive = true
+    if !isCondensedMode {
+      videoStageView.heightAnchor.constraint(equalToConstant: 360).isActive = true
+    }
     #else
-    videoStageView.widthAnchor.constraint(equalTo: videoStageView.heightAnchor, multiplier: 16.0 / 9.0).isActive = true
+    if !isCondensedMode {
+      videoStageView.widthAnchor.constraint(equalTo: videoStageView.heightAnchor, multiplier: 16.0 / 9.0).isActive = true
+    }
     #endif
   }
 
   private func setUpSpeedControls() {
     configureSpeedRow(frontSpeedRow, speedLabel: frontSpeedLabel)
     configureSpeedRow(backSpeedRow, speedLabel: backSpeedLabel)
+    configureSpeedRow(settingsSpeedRow, speedLabel: settingsSpeedLabel)
 
     backStreakLabel.font = .preferredFont(forTextStyle: .footnote)
     backStreakLabel.textColor = .secondaryLabel
     backStreakLabel.textAlignment = .center
     backStreakLabel.translatesAutoresizingMaskIntoConstraints = false
+
+    settingsStreakLabel.font = .preferredFont(forTextStyle: .footnote)
+    settingsStreakLabel.textColor = .white
+    settingsStreakLabel.textAlignment = .center
+    settingsStreakLabel.translatesAutoresizingMaskIntoConstraints = false
   }
 
   private func configureSpeedRow(_ row: UIStackView, speedLabel: UILabel) {
@@ -242,6 +297,7 @@ final class SRSCardReviewView: UIView {
     let text = String(format: "%.2fx", playbackSpeed)
     frontSpeedLabel.text = text
     backSpeedLabel.text = text
+    settingsSpeedLabel.text = text
   }
 
   private func configureLoopButton(_ button: UIButton) {
@@ -266,24 +322,24 @@ final class SRSCardReviewView: UIView {
   private func updateLoopButtons() {
     let isOn = MSRSAppSettings.autoLoopVideo
     let color: UIColor = isOn ? .systemGreen : .systemGray
-    frontLoopButton.configuration?.baseBackgroundColor = color
-    frontLoopButton.configuration?.baseForegroundColor = isOn ? .white : .label
-    backLoopButton.configuration?.baseBackgroundColor = color
-    backLoopButton.configuration?.baseForegroundColor = isOn ? .white : .label
+    for button in [frontLoopButton, backLoopButton, settingsLoopButton] {
+      button.configuration?.baseBackgroundColor = color
+      button.configuration?.baseForegroundColor = isOn ? .white : .label
+    }
   }
 
   private func setUpFront() {
     frontContainer.translatesAutoresizingMaskIntoConstraints = false
 
     frontTranscriptRevealContainer.translatesAutoresizingMaskIntoConstraints = false
-    frontTranscriptRevealContainer.backgroundColor = .secondarySystemBackground
+    frontTranscriptRevealContainer.backgroundColor = isCondensedMode ? UIColor.white.withAlphaComponent(0.15) : .secondarySystemBackground
     frontTranscriptRevealContainer.layer.cornerRadius = 10
     let revealTap = UITapGestureRecognizer(target: self, action: #selector(handleFrontTranscriptRevealTap))
     frontTranscriptRevealContainer.addGestureRecognizer(revealTap)
 
     frontTranscriptRevealHint.text = "Tap to reveal Japanese transcript"
     frontTranscriptRevealHint.font = .systemFont(ofSize: 18, weight: .medium)
-    frontTranscriptRevealHint.textColor = .secondaryLabel
+    frontTranscriptRevealHint.textColor = isCondensedMode ? .white.withAlphaComponent(0.6) : .secondaryLabel
     frontTranscriptRevealHint.textAlignment = .center
     frontTranscriptRevealHint.translatesAutoresizingMaskIntoConstraints = false
     frontTranscriptRevealContainer.addSubview(frontTranscriptRevealHint)
@@ -291,6 +347,7 @@ final class SRSCardReviewView: UIView {
     frontTranscriptLabel.font = .systemFont(ofSize: 28, weight: .regular)
     frontTranscriptLabel.numberOfLines = 0
     frontTranscriptLabel.textAlignment = .center
+    frontTranscriptLabel.textColor = isCondensedMode ? .white : .label
     frontTranscriptLabel.isHidden = true
     frontTranscriptLabel.translatesAutoresizingMaskIntoConstraints = false
     frontTranscriptRevealContainer.addSubview(frontTranscriptLabel)
@@ -298,16 +355,10 @@ final class SRSCardReviewView: UIView {
     Self.styleAction(frontToggleButton, title: "Toggle Thumbnail", hotkey: "T", backgroundColor: .systemGray)
     frontToggleButton.addTarget(self, action: #selector(handleToggleTap), for: .touchUpInside)
 
-    Self.styleAction(frontPlayButton, title: "Play", hotkey: "Space", backgroundColor: .systemBlue)
-    frontPlayButton.addTarget(self, action: #selector(handlePlayTap), for: .touchUpInside)
-
     configureLoopButton(frontLoopButton)
 
     Self.styleAction(frontShowBackButton, title: "Show Back", hotkey: "Return", backgroundColor: .systemIndigo)
     frontShowBackButton.addTarget(self, action: #selector(handleFrontRevealBackTap), for: .touchUpInside)
-    if MSRSDeviceType.current == .iPad {
-      frontShowBackButton.heightAnchor.constraint(equalToConstant: 120).isActive = true
-    }
 
     #if targetEnvironment(macCatalyst)
     Self.styleAction(frontTypeAnswerButton, title: "Type Answer", hotkey: "", backgroundColor: .systemOrange)
@@ -370,6 +421,9 @@ final class SRSCardReviewView: UIView {
     #else
     backTranscriptView.transcriptFont = .systemFont(ofSize: 28, weight: .regular)
     #endif
+    if isCondensedMode {
+      backTranscriptView.transcriptTextColor = .white
+    }
     backTranscriptView.onTermTapped = { [weak self] termID in
       self?.onTermTapped?(termID)
     }
@@ -379,18 +433,15 @@ final class SRSCardReviewView: UIView {
     backTranscriptView.translatesAutoresizingMaskIntoConstraints = false
 
     backInflectionAnnotationsLabel.font = .preferredFont(forTextStyle: .caption1)
-    backInflectionAnnotationsLabel.textColor = .tertiaryLabel
+    backInflectionAnnotationsLabel.textColor = isCondensedMode ? .white.withAlphaComponent(0.5) : .tertiaryLabel
     backInflectionAnnotationsLabel.numberOfLines = 0
     backInflectionAnnotationsLabel.isHidden = true
     backInflectionAnnotationsLabel.translatesAutoresizingMaskIntoConstraints = false
 
     backTranslationLabel.font = .preferredFont(forTextStyle: .title3)
-    backTranslationLabel.textColor = .secondaryLabel
+    backTranslationLabel.textColor = isCondensedMode ? .white.withAlphaComponent(0.8) : .secondaryLabel
     backTranslationLabel.numberOfLines = 0
     backTranslationLabel.translatesAutoresizingMaskIntoConstraints = false
-
-    Self.styleAction(backPlayButton, title: "Play", hotkey: "Space", backgroundColor: .systemBlue)
-    backPlayButton.addTarget(self, action: #selector(handlePlayTap), for: .touchUpInside)
 
     configureLoopButton(backLoopButton)
 
@@ -398,20 +449,16 @@ final class SRSCardReviewView: UIView {
     backFailButton.addTarget(self, action: #selector(handleFailTap), for: .touchUpInside)
     Self.styleAction(backPassButton, title: "Pass", hotkey: "2", backgroundColor: .systemGreen)
     backPassButton.addTarget(self, action: #selector(handlePassTap), for: .touchUpInside)
-    if MSRSDeviceType.current == .iPad {
-      backFailButton.heightAnchor.constraint(equalToConstant: 120).isActive = true
-      backPassButton.heightAnchor.constraint(equalToConstant: 120).isActive = true
-    }
   }
 
   private func setUpLLMResult() {
     llmResultContainer.translatesAutoresizingMaskIntoConstraints = false
-    llmResultContainer.backgroundColor = .tertiarySystemBackground
+    llmResultContainer.backgroundColor = isCondensedMode ? UIColor.white.withAlphaComponent(0.1) : .tertiarySystemBackground
     llmResultContainer.layer.cornerRadius = 10
     llmResultContainer.isHidden = true
 
     llmUserAnswerLabel.font = .preferredFont(forTextStyle: .body)
-    llmUserAnswerLabel.textColor = .label
+    llmUserAnswerLabel.textColor = isCondensedMode ? .white : .label
     llmUserAnswerLabel.numberOfLines = 0
     llmUserAnswerLabel.translatesAutoresizingMaskIntoConstraints = false
     llmUserAnswerLabel.isHidden = true
@@ -421,7 +468,7 @@ final class SRSCardReviewView: UIView {
 
     llmLoadingLabel.text = "Grading…"
     llmLoadingLabel.font = .preferredFont(forTextStyle: .subheadline)
-    llmLoadingLabel.textColor = .secondaryLabel
+    llmLoadingLabel.textColor = isCondensedMode ? .white.withAlphaComponent(0.7) : .secondaryLabel
     llmLoadingLabel.translatesAutoresizingMaskIntoConstraints = false
 
     llmScoreLabel.font = .monospacedDigitSystemFont(ofSize: 20, weight: .bold)
@@ -429,7 +476,7 @@ final class SRSCardReviewView: UIView {
     llmScoreLabel.isHidden = true
 
     llmReasoningLabel.font = .preferredFont(forTextStyle: .body)
-    llmReasoningLabel.textColor = .secondaryLabel
+    llmReasoningLabel.textColor = isCondensedMode ? .white.withAlphaComponent(0.7) : .secondaryLabel
     llmReasoningLabel.numberOfLines = 0
     llmReasoningLabel.translatesAutoresizingMaskIntoConstraints = false
     llmReasoningLabel.isHidden = true
@@ -464,14 +511,77 @@ final class SRSCardReviewView: UIView {
     emptyLabel.translatesAutoresizingMaskIntoConstraints = false
   }
 
-  private func setUpLayout() {
+  private func setUpAutoPass() {
+    autoPassContainer.translatesAutoresizingMaskIntoConstraints = false
+    autoPassContainer.isHidden = true
+
+    autoPassProgressBar.backgroundColor = isCondensedMode ? UIColor.white.withAlphaComponent(0.15) : .systemGray5
+    autoPassProgressBar.layer.cornerRadius = 4
+    autoPassProgressBar.clipsToBounds = true
+    autoPassProgressBar.translatesAutoresizingMaskIntoConstraints = false
+
+    autoPassProgressFill.backgroundColor = .systemGreen
+    autoPassProgressFill.translatesAutoresizingMaskIntoConstraints = false
+    autoPassProgressBar.addSubview(autoPassProgressFill)
+
+    let progressWidth = autoPassProgressFill.widthAnchor.constraint(equalToConstant: 0)
+    autoPassProgressWidthConstraint = progressWidth
+
+    NSLayoutConstraint.activate([
+      autoPassProgressFill.topAnchor.constraint(equalTo: autoPassProgressBar.topAnchor),
+      autoPassProgressFill.leadingAnchor.constraint(equalTo: autoPassProgressBar.leadingAnchor),
+      autoPassProgressFill.bottomAnchor.constraint(equalTo: autoPassProgressBar.bottomAnchor),
+      progressWidth,
+    ])
+
+    autoPassLabel.font = .monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
+    autoPassLabel.textColor = isCondensedMode ? .white : .secondaryLabel
+    autoPassLabel.textAlignment = .center
+    autoPassLabel.translatesAutoresizingMaskIntoConstraints = false
+
+    var cancelConfig = UIButton.Configuration.tinted()
+    cancelConfig.title = "Wait"
+    cancelConfig.image = UIImage(systemName: "pause.circle")
+    cancelConfig.imagePadding = 6
+    cancelConfig.baseBackgroundColor = .systemOrange
+    cancelConfig.baseForegroundColor = isCondensedMode ? .white : .systemOrange
+    cancelConfig.cornerStyle = .medium
+    cancelConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
+    autoPassCancelButton.configuration = cancelConfig
+    autoPassCancelButton.translatesAutoresizingMaskIntoConstraints = false
+    autoPassCancelButton.addTarget(self, action: #selector(handleAutoPassCancel), for: .touchUpInside)
+
+    let row = UIStackView(arrangedSubviews: [autoPassLabel, autoPassCancelButton])
+    row.axis = .horizontal
+    row.spacing = 12
+    row.alignment = .center
+    row.translatesAutoresizingMaskIntoConstraints = false
+
+    autoPassContainer.addSubview(autoPassProgressBar)
+    autoPassContainer.addSubview(row)
+
+    NSLayoutConstraint.activate([
+      autoPassProgressBar.topAnchor.constraint(equalTo: autoPassContainer.topAnchor),
+      autoPassProgressBar.leadingAnchor.constraint(equalTo: autoPassContainer.leadingAnchor),
+      autoPassProgressBar.trailingAnchor.constraint(equalTo: autoPassContainer.trailingAnchor),
+      autoPassProgressBar.heightAnchor.constraint(equalToConstant: 8),
+
+      row.topAnchor.constraint(equalTo: autoPassProgressBar.bottomAnchor, constant: 6),
+      row.centerXAnchor.constraint(equalTo: autoPassContainer.centerXAnchor),
+      row.bottomAnchor.constraint(equalTo: autoPassContainer.bottomAnchor),
+    ])
+  }
+
+  // MARK: - Standard layout
+
+  private func setUpStandardLayout() {
+    addSubview(positionLabel)
     addSubview(videoStageView)
     addSubview(clipProgressBar)
     addSubview(frontContainer)
     addSubview(backContainer)
 
-    // Front: [Toggle | Play | Loop] row, speed row, optional transcript, [Show Back | Type Answer] at bottom
-    let frontTopRow = UIStackView(arrangedSubviews: [frontToggleButton, frontPlayButton, frontLoopButton])
+    let frontTopRow = UIStackView(arrangedSubviews: [frontToggleButton, frontLoopButton])
     frontTopRow.axis = .horizontal
     frontTopRow.spacing = 16
     frontTopRow.translatesAutoresizingMaskIntoConstraints = false
@@ -482,8 +592,7 @@ final class SRSCardReviewView: UIView {
     frontContainer.addSubview(frontBottomRow)
     frontContainer.addSubview(frontAnswerRow)
 
-    // Back: [Play | Loop] row, speed row, streak, transcript + translation, LLM result, Fail|Pass at bottom
-    let backTopRow = UIStackView(arrangedSubviews: [backPlayButton, backLoopButton])
+    let backTopRow = UIStackView(arrangedSubviews: [backLoopButton])
     backTopRow.axis = .horizontal
     backTopRow.spacing = 16
     backTopRow.translatesAutoresizingMaskIntoConstraints = false
@@ -502,21 +611,20 @@ final class SRSCardReviewView: UIView {
     backContainer.addSubview(backTranslationLabel)
     backContainer.addSubview(llmResultContainer)
     backContainer.addSubview(backGradeRow)
+    backContainer.addSubview(autoPassContainer)
 
     NSLayoutConstraint.activate([
-      positionLabel.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 8),
-      positionLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+      positionLabel.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 4),
       positionLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
 
-      videoStageView.topAnchor.constraint(equalTo: positionLabel.bottomAnchor, constant: 16),
-      videoStageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
-      videoStageView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
+      videoStageView.topAnchor.constraint(equalTo: positionLabel.bottomAnchor, constant: 4),
+      videoStageView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      videoStageView.trailingAnchor.constraint(equalTo: trailingAnchor),
 
-      clipProgressBar.topAnchor.constraint(equalTo: videoStageView.bottomAnchor, constant: 6),
-      clipProgressBar.leadingAnchor.constraint(equalTo: videoStageView.leadingAnchor),
-      clipProgressBar.trailingAnchor.constraint(equalTo: videoStageView.trailingAnchor),
+      clipProgressBar.topAnchor.constraint(equalTo: videoStageView.bottomAnchor, constant: 4),
+      clipProgressBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+      clipProgressBar.trailingAnchor.constraint(equalTo: trailingAnchor),
 
-      // -- Front --
       frontContainer.topAnchor.constraint(equalTo: clipProgressBar.bottomAnchor, constant: 12),
       frontContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
       frontContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
@@ -540,7 +648,6 @@ final class SRSCardReviewView: UIView {
       frontAnswerRow.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
       frontAnswerRow.bottomAnchor.constraint(equalTo: frontContainer.bottomAnchor),
 
-      // -- Back --
       backContainer.topAnchor.constraint(equalTo: clipProgressBar.bottomAnchor, constant: 12),
       backContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 24),
       backContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
@@ -573,14 +680,247 @@ final class SRSCardReviewView: UIView {
 
       backGradeRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backGradeRow.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
-      backGradeRow.bottomAnchor.constraint(equalTo: backContainer.bottomAnchor),
 
-      // -- Empty --
+      autoPassContainer.topAnchor.constraint(equalTo: backGradeRow.bottomAnchor, constant: 8),
+      autoPassContainer.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      autoPassContainer.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+      autoPassContainer.bottomAnchor.constraint(equalTo: backContainer.bottomAnchor),
+
       emptyLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
       emptyLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
       emptyLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
       emptyLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -24),
     ])
+  }
+
+  // MARK: - Condensed layout
+
+  private func setUpCondensedOverlay() {
+    gradientView.translatesAutoresizingMaskIntoConstraints = false
+    gradientView.isUserInteractionEnabled = false
+
+    positionLabel.font = .preferredFont(forTextStyle: .footnote)
+    positionLabel.textColor = .white.withAlphaComponent(0.7)
+    positionLabel.textAlignment = .right
+    positionLabel.translatesAutoresizingMaskIntoConstraints = false
+
+    var settingsBtnConfig = UIButton.Configuration.filled()
+    settingsBtnConfig.image = UIImage(systemName: "gearshape.fill")
+    settingsBtnConfig.baseBackgroundColor = UIColor.white.withAlphaComponent(0.2)
+    settingsBtnConfig.baseForegroundColor = .white
+    settingsBtnConfig.cornerStyle = .capsule
+    settingsBtnConfig.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
+    condensedSettingsButton.configuration = settingsBtnConfig
+    condensedSettingsButton.translatesAutoresizingMaskIntoConstraints = false
+    condensedSettingsButton.addTarget(self, action: #selector(handleSettingsToggle), for: .touchUpInside)
+  }
+
+  private func setUpSettingsPanel() {
+    settingsPanel.backgroundColor = UIColor.black.withAlphaComponent(0.9)
+    settingsPanel.layer.cornerRadius = 16
+    settingsPanel.translatesAutoresizingMaskIntoConstraints = false
+    settingsPanel.isHidden = true
+
+    configureLoopButton(settingsLoopButton)
+
+    Self.styleAction(settingsToggleButton, title: "Toggle Thumbnail", hotkey: "T", backgroundColor: .systemGray)
+    settingsToggleButton.addTarget(self, action: #selector(handleToggleTap), for: .touchUpInside)
+
+    Self.styleAction(settingsDismissButton, title: "Dismiss Review", hotkey: "", backgroundColor: .systemRed.withAlphaComponent(0.8))
+    settingsDismissButton.addTarget(self, action: #selector(handleDismissReview), for: .touchUpInside)
+
+    Self.styleAction(settingsHideButton, title: "Hide Settings", hotkey: "", backgroundColor: .systemGray)
+    settingsHideButton.addTarget(self, action: #selector(handleSettingsToggle), for: .touchUpInside)
+
+    let heightLabel = UILabel()
+    heightLabel.text = "Button Height"
+    heightLabel.font = .preferredFont(forTextStyle: .subheadline)
+    heightLabel.textColor = .white
+    heightLabel.translatesAutoresizingMaskIntoConstraints = false
+
+    buttonHeightValueLabel.font = .monospacedDigitSystemFont(ofSize: 15, weight: .semibold)
+    buttonHeightValueLabel.textColor = .white
+    buttonHeightValueLabel.textAlignment = .right
+    buttonHeightValueLabel.translatesAutoresizingMaskIntoConstraints = false
+    buttonHeightValueLabel.text = "\(Int(MSRSAppSettings.srsButtonHeight))pt"
+
+    buttonHeightSlider.minimumValue = Float(MSRSAppSettings.srsButtonHeightMin)
+    buttonHeightSlider.maximumValue = Float(MSRSAppSettings.srsButtonHeightMax)
+    buttonHeightSlider.value = Float(MSRSAppSettings.srsButtonHeight)
+    buttonHeightSlider.translatesAutoresizingMaskIntoConstraints = false
+    buttonHeightSlider.addTarget(self, action: #selector(handleButtonHeightChanged(_:)), for: .valueChanged)
+
+    let heightHeaderRow = UIStackView(arrangedSubviews: [heightLabel, buttonHeightValueLabel])
+    heightHeaderRow.axis = .horizontal
+    heightHeaderRow.spacing = 8
+
+    let stack = UIStackView(arrangedSubviews: [
+      settingsLoopButton,
+      settingsSpeedRow,
+      settingsStreakLabel,
+      settingsToggleButton,
+      heightHeaderRow,
+      buttonHeightSlider,
+      settingsDismissButton,
+      settingsHideButton,
+    ])
+    stack.axis = .vertical
+    stack.spacing = 12
+    stack.alignment = .fill
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    settingsPanel.addSubview(stack)
+
+    NSLayoutConstraint.activate([
+      stack.topAnchor.constraint(equalTo: settingsPanel.topAnchor, constant: 16),
+      stack.leadingAnchor.constraint(equalTo: settingsPanel.leadingAnchor, constant: 16),
+      stack.trailingAnchor.constraint(equalTo: settingsPanel.trailingAnchor, constant: -16),
+      stack.bottomAnchor.constraint(equalTo: settingsPanel.bottomAnchor, constant: -16),
+    ])
+  }
+
+  private func setUpCondensedLayout() {
+    addSubview(videoStageView)
+    addSubview(gradientView)
+    addSubview(clipProgressBar)
+    addSubview(frontContainer)
+    addSubview(backContainer)
+    addSubview(positionLabel)
+    addSubview(condensedSettingsButton)
+    addSubview(settingsPanel)
+
+    let backGradeRow = UIStackView(arrangedSubviews: [backFailButton, backPassButton])
+    backGradeRow.axis = .horizontal
+    backGradeRow.spacing = 16
+    backGradeRow.distribution = .fillEqually
+    backGradeRow.translatesAutoresizingMaskIntoConstraints = false
+
+    frontContainer.addSubview(frontTranscriptRevealContainer)
+    frontContainer.addSubview(frontBottomRow)
+    frontContainer.addSubview(frontAnswerRow)
+
+    backContainer.addSubview(backTranscriptView)
+    backContainer.addSubview(backInflectionAnnotationsLabel)
+    backContainer.addSubview(backTranslationLabel)
+    backContainer.addSubview(llmResultContainer)
+    backContainer.addSubview(backGradeRow)
+    backContainer.addSubview(autoPassContainer)
+
+    let hPad: CGFloat = 16
+
+    let defaultAspect: CGFloat = 9.0 / 16.0
+    let aspectConstraint = videoStageView.heightAnchor.constraint(
+      equalTo: videoStageView.widthAnchor, multiplier: defaultAspect
+    )
+    videoStageAspectConstraint = aspectConstraint
+
+    NSLayoutConstraint.activate([
+      videoStageView.topAnchor.constraint(equalTo: topAnchor),
+      videoStageView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      videoStageView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      aspectConstraint,
+
+      gradientView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      gradientView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      gradientView.bottomAnchor.constraint(equalTo: bottomAnchor),
+      gradientView.heightAnchor.constraint(equalTo: heightAnchor, multiplier: 0.55),
+
+      clipProgressBar.leadingAnchor.constraint(equalTo: leadingAnchor),
+      clipProgressBar.trailingAnchor.constraint(equalTo: trailingAnchor),
+      clipProgressBar.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -4),
+
+      condensedSettingsButton.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor, constant: 8),
+      condensedSettingsButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: hPad),
+      condensedSettingsButton.widthAnchor.constraint(equalToConstant: 40),
+      condensedSettingsButton.heightAnchor.constraint(equalToConstant: 40),
+
+      positionLabel.centerYAnchor.constraint(equalTo: condensedSettingsButton.centerYAnchor),
+      positionLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -hPad),
+
+      // Front container — bottom-aligned
+      frontContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: hPad),
+      frontContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -hPad),
+      frontContainer.bottomAnchor.constraint(equalTo: clipProgressBar.topAnchor, constant: -8),
+
+      frontTranscriptRevealContainer.topAnchor.constraint(equalTo: frontContainer.topAnchor),
+      frontTranscriptRevealContainer.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
+      frontTranscriptRevealContainer.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
+
+      frontBottomRow.topAnchor.constraint(equalTo: frontTranscriptRevealContainer.bottomAnchor, constant: 12),
+      frontBottomRow.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
+      frontBottomRow.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
+      frontBottomRow.bottomAnchor.constraint(equalTo: frontContainer.bottomAnchor),
+
+      frontAnswerRow.leadingAnchor.constraint(equalTo: frontContainer.leadingAnchor),
+      frontAnswerRow.trailingAnchor.constraint(equalTo: frontContainer.trailingAnchor),
+      frontAnswerRow.bottomAnchor.constraint(equalTo: frontContainer.bottomAnchor),
+
+      // Back container — bottom-aligned
+      backContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: hPad),
+      backContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -hPad),
+      backContainer.bottomAnchor.constraint(equalTo: clipProgressBar.topAnchor, constant: -8),
+
+      backTranscriptView.topAnchor.constraint(equalTo: backContainer.topAnchor),
+      backTranscriptView.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      backTranscriptView.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      backInflectionAnnotationsLabel.topAnchor.constraint(equalTo: backTranscriptView.bottomAnchor, constant: 4),
+      backInflectionAnnotationsLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      backInflectionAnnotationsLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      backTranslationLabel.topAnchor.constraint(equalTo: backInflectionAnnotationsLabel.bottomAnchor, constant: 8),
+      backTranslationLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      backTranslationLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      llmResultContainer.topAnchor.constraint(equalTo: backTranslationLabel.bottomAnchor, constant: 8),
+      llmResultContainer.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      llmResultContainer.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      backGradeRow.topAnchor.constraint(equalTo: llmResultContainer.bottomAnchor, constant: 8),
+      backGradeRow.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      backGradeRow.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      autoPassContainer.topAnchor.constraint(equalTo: backGradeRow.bottomAnchor, constant: 8),
+      autoPassContainer.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      autoPassContainer.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+      autoPassContainer.bottomAnchor.constraint(equalTo: backContainer.bottomAnchor),
+
+      // Settings panel
+      settingsPanel.centerXAnchor.constraint(equalTo: centerXAnchor),
+      settingsPanel.centerYAnchor.constraint(equalTo: centerYAnchor),
+      settingsPanel.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -32),
+      settingsPanel.widthAnchor.constraint(lessThanOrEqualToConstant: 400),
+
+      // Empty
+      emptyLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+      emptyLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+      emptyLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 24),
+      emptyLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -24),
+    ])
+  }
+
+  // MARK: - Video aspect ratio (condensed mode)
+
+  private func updateVideoAspectRatio(size: CGSize) {
+    guard isCondensedMode, size.width > 0, size.height > 0 else { return }
+    let multiplier = size.height / size.width
+    videoStageAspectConstraint?.isActive = false
+    let constraint = videoStageView.heightAnchor.constraint(
+      equalTo: videoStageView.widthAnchor, multiplier: multiplier
+    )
+    videoStageAspectConstraint = constraint
+    constraint.isActive = true
+  }
+
+  // MARK: - Button height
+
+  private func applyButtonHeight(_ height: CGFloat) {
+    NSLayoutConstraint.deactivate(buttonHeightConstraints)
+    buttonHeightConstraints = [
+      frontShowBackButton.heightAnchor.constraint(equalToConstant: height),
+      backFailButton.heightAnchor.constraint(equalToConstant: height),
+      backPassButton.heightAnchor.constraint(equalToConstant: height),
+    ]
+    NSLayoutConstraint.activate(buttonHeightConstraints)
   }
 
   // MARK: - Public API
@@ -619,6 +959,10 @@ final class SRSCardReviewView: UIView {
     emptyLabel.isHidden = true
     positionLabel.text = viewModel.cardPositionLabel
     videoStageView.isHidden = false
+    if isCondensedMode {
+      gradientView.isHidden = false
+      condensedSettingsButton.isHidden = false
+    }
 
     backTranscriptView.setTranscript(
       text: viewModel.transcriptText,
@@ -640,6 +984,19 @@ final class SRSCardReviewView: UIView {
     self.currentClipEndTime = viewModel.clipEndTimeSeconds
     self.playerView.attach(player: newPlayer)
 
+    if isCondensedMode {
+      let generator = AVAssetImageGenerator(asset: asset)
+      generator.appliesPreferredTrackTransform = true
+      generator.maximumSize = CGSize(width: 320, height: 320)
+      let cmTime = CMTime(seconds: viewModel.clipStartTimeSeconds, preferredTimescale: 600)
+      Task { [weak self] in
+        guard let (cgImage, _) = try? await generator.image(at: cmTime) else { return }
+        let size = CGSize(width: cgImage.width, height: cgImage.height)
+        guard size.width > 0, size.height > 0 else { return }
+        self?.updateVideoAspectRatio(size: size)
+      }
+    }
+
     frontVideoVisibility = viewModel.frontVideoVisibility
     playbackSpeed = viewModel.playbackSpeed
     isShowingBack = false
@@ -648,7 +1005,11 @@ final class SRSCardReviewView: UIView {
     playerView.isHidden = true
     updateSpeedLabels()
     updateLoopButtons()
-    backStreakLabel.text = "Consecutive correct at this speed: \(viewModel.consecutiveCorrectAtCurrentSpeed)"
+
+    let streakText = "Consecutive correct at this speed: \(viewModel.consecutiveCorrectAtCurrentSpeed)"
+    backStreakLabel.text = streakText
+    settingsStreakLabel.text = streakText
+
     updateGradeButtonTitles(
       failInterval: viewModel.failIntervalSeconds,
       passInterval: viewModel.passIntervalSeconds
@@ -657,15 +1018,15 @@ final class SRSCardReviewView: UIView {
     currentVideoFileURL = viewModel.videoFileURL
     thumbnailImageView.image = nil
 
-    // Reset front answer state
     frontBottomRow.isHidden = false
     frontAnswerRow.isHidden = true
     frontAnswerTextField.text = ""
     frontAnswerTextField.resignFirstResponder()
 
-    // Reset LLM result state
     hideLLMResult()
     resetGradeButtonHighlights()
+    stopAutoPassTimer()
+    autoPassCancelled = false
 
     frontTranscriptRevealContainer.isHidden = !MSRSAppSettings.showFrontTranscript
     applyVideoStageVisibility()
@@ -687,6 +1048,7 @@ final class SRSCardReviewView: UIView {
     frontContainer.isHidden = true
     backContainer.isHidden = false
     playFromStart()
+    startAutoPassTimerIfNeeded()
   }
 
   func replay() {
@@ -694,11 +1056,17 @@ final class SRSCardReviewView: UIView {
   }
 
   func showEmptyState(message: String) {
+    stopAutoPassTimer()
     emptyLabel.text = message
     emptyLabel.isHidden = false
     videoStageView.isHidden = true
     frontContainer.isHidden = true
     backContainer.isHidden = true
+    if isCondensedMode {
+      gradientView.isHidden = true
+      condensedSettingsButton.isHidden = true
+      settingsPanel.isHidden = true
+    }
     stopPlayback()
   }
 
@@ -914,6 +1282,8 @@ final class SRSCardReviewView: UIView {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
     } else {
       applyVideoStageVisibility()
+      let startCMTime = CMTime(seconds: currentClipStartTime, preferredTimescale: 600)
+      player?.seek(to: startCMTime, toleranceBefore: .zero, toleranceAfter: .zero)
     }
   }
 
@@ -947,6 +1317,9 @@ final class SRSCardReviewView: UIView {
         await MainActor.run {
           self?.thumbnailImageView.image = cached
           self?.updateBlurFrame()
+          if let size = cached.size as CGSize? {
+            self?.updateVideoAspectRatio(size: size)
+          }
         }
         return
       }
@@ -967,6 +1340,7 @@ final class SRSCardReviewView: UIView {
         await MainActor.run {
           self?.thumbnailImageView.image = image
           self?.updateBlurFrame()
+          self?.updateVideoAspectRatio(size: image.size)
         }
       } catch {
         // Thumbnail generation failed — black background is the fallback.
@@ -976,12 +1350,12 @@ final class SRSCardReviewView: UIView {
 
   // MARK: - Actions
 
-  @objc private func handleToggleTap() {
-    cycleFrontVideoVisibility()
+  @objc private func handleVideoTap() {
+    togglePlayPause()
   }
 
-  @objc private func handlePlayTap() {
-    togglePlayPause()
+  @objc private func handleToggleTap() {
+    cycleFrontVideoVisibility()
   }
 
   @objc private func handleFrontTranscriptRevealTap() {
@@ -1014,11 +1388,82 @@ final class SRSCardReviewView: UIView {
   }
 
   @objc private func handleFailTap() {
+    stopAutoPassTimer()
     onGraded?(.fail)
   }
 
   @objc private func handlePassTap() {
+    stopAutoPassTimer()
     onGraded?(.pass)
+  }
+
+  @objc private func handleAutoPassCancel() {
+    autoPassCancelled = true
+    stopAutoPassTimer()
+  }
+
+  @objc private func handleSettingsToggle() {
+    settingsPanel.isHidden.toggle()
+  }
+
+  @objc private func handleDismissReview() {
+    settingsPanel.isHidden = true
+    onDismissReview?()
+  }
+
+  @objc private func handleButtonHeightChanged(_ sender: UISlider) {
+    let height = CGFloat(sender.value.rounded())
+    MSRSAppSettings.srsButtonHeight = height
+    buttonHeightValueLabel.text = "\(Int(height))pt"
+    applyButtonHeight(height)
+    UIView.animate(withDuration: 0.1) { self.layoutIfNeeded() }
+  }
+
+  // MARK: - Auto-pass timer
+
+  private func startAutoPassTimerIfNeeded() {
+    stopAutoPassTimer()
+    guard MSRSAppSettings.autoPassEnabled, !autoPassCancelled else {
+      autoPassContainer.isHidden = true
+      return
+    }
+    let delay = MSRSAppSettings.autoPassDelay
+    autoPassStartDate = Date()
+    autoPassContainer.isHidden = false
+    autoPassLabel.text = "Auto-pass in \(Int(delay))s"
+    autoPassProgressWidthConstraint?.constant = 0
+    layoutIfNeeded()
+
+    let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.tickAutoPass()
+      }
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    autoPassTimer = timer
+  }
+
+  private func tickAutoPass() {
+    guard let startDate = autoPassStartDate else { return }
+    let delay = MSRSAppSettings.autoPassDelay
+    let elapsed = Date().timeIntervalSince(startDate)
+    let fraction = min(elapsed / delay, 1.0)
+
+    autoPassProgressWidthConstraint?.constant = autoPassProgressBar.bounds.width * fraction
+    let remaining = max(0, Int(ceil(delay - elapsed)))
+    autoPassLabel.text = "Auto-pass in \(remaining)s"
+
+    if elapsed >= delay {
+      stopAutoPassTimer()
+      onGraded?(.pass)
+    }
+  }
+
+  private func stopAutoPassTimer() {
+    autoPassTimer?.invalidate()
+    autoPassTimer = nil
+    autoPassStartDate = nil
+    autoPassContainer.isHidden = true
   }
 
   private func updateGradeButtonTitles(
@@ -1099,4 +1544,20 @@ private final class PlayerLayerView: UIView {
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError() }
   func attach(player: AVPlayer) { playerLayer.player = player }
+}
+
+// MARK: - GradientOverlayView
+
+private final class GradientOverlayView: UIView {
+  override class var layerClass: AnyClass { CAGradientLayer.self }
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    let gradient = layer as! CAGradientLayer
+    gradient.colors = [UIColor.clear.cgColor, UIColor.black.withAlphaComponent(0.85).cgColor]
+    gradient.startPoint = CGPoint(x: 0.5, y: 0)
+    gradient.endPoint = CGPoint(x: 0.5, y: 1)
+    isUserInteractionEnabled = false
+  }
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError() }
 }

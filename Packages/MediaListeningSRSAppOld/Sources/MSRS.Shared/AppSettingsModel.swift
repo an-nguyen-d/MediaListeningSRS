@@ -10,6 +10,7 @@ public struct AppSettingsModel: Sendable, Equatable {
   public var autoLoopVideo: Bool
   public var llmGradingPrompt: String
   public var syncIntervalSeconds: Int
+  public var candidatePlayDelay: Double
 
   public init(
     desiredRetention: Double = 0.9,
@@ -19,7 +20,8 @@ public struct AppSettingsModel: Sendable, Equatable {
     requireSkipOrMakeCardConfirmation: Bool = true,
     autoLoopVideo: Bool = false,
     llmGradingPrompt: String = "",
-    syncIntervalSeconds: Int = 60
+    syncIntervalSeconds: Int = 60,
+    candidatePlayDelay: Double = 0
   ) {
     self.desiredRetention = desiredRetention
     self.showFrontTranscript = showFrontTranscript
@@ -29,5 +31,6 @@ public struct AppSettingsModel: Sendable, Equatable {
     self.autoLoopVideo = autoLoopVideo
     self.llmGradingPrompt = llmGradingPrompt
     self.syncIntervalSeconds = syncIntervalSeconds
+    self.candidatePlayDelay = candidatePlayDelay
   }
 }

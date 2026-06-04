@@ -68,6 +68,7 @@ final class CandidateDetailView: UIView {
   private var currentPlaybackRate: Float = 1.0
   private var isLoopActive: Bool = false
   private var pendingLoopRestartTask: Task<Void, Never>?
+  private var pendingAutoPlayWorkItem: DispatchWorkItem?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -316,7 +317,17 @@ final class CandidateDetailView: UIView {
     currentClipStartTime = viewModel.customStartTime
     currentClipEndTime = viewModel.customEndTime
     if isFirstSet {
-      startLoop()
+      pendingAutoPlayWorkItem?.cancel()
+      let delay = MSRSAppSettings.candidatePlayDelay
+      if delay > 0 {
+        let workItem = DispatchWorkItem { [weak self] in
+          self?.startLoop()
+        }
+        pendingAutoPlayWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+      } else {
+        startLoop()
+      }
     }
   }
 
@@ -344,6 +355,8 @@ final class CandidateDetailView: UIView {
     Self.setStyledButtonTitle(playPauseButton, title: "Play", hotkey: "Space")
     pendingLoopRestartTask?.cancel()
     pendingLoopRestartTask = nil
+    pendingAutoPlayWorkItem?.cancel()
+    pendingAutoPlayWorkItem = nil
     player?.pause()
     removeLoopObserver()
   }

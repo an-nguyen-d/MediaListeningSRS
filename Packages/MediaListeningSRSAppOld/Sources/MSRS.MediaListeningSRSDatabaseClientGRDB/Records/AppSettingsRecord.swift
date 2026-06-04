@@ -15,6 +15,7 @@ public struct AppSettingsRecord: Codable, FetchableRecord, MutablePersistableRec
   public var autoLoopVideo: Bool
   public var llmGradingPrompt: String
   public var syncIntervalSeconds: Int
+  public var candidatePlayDelay: Double
 
   public mutating func didInsert(_ inserted: InsertionSuccess) {
     id = inserted.rowID

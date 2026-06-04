@@ -28,6 +28,10 @@ public final class HighlightableTranscriptView: UITextView {
     didSet { renderCurrent() }
   }
 
+  public var transcriptTextColor: UIColor = .label {
+    didSet { renderCurrent() }
+  }
+
   public var highlightFillColor: UIColor = UIColor.systemYellow.withAlphaComponent(0.18)
   public var highlightBorderColor: UIColor = UIColor.systemOrange
   public var knownHighlightFillColor: UIColor = UIColor.systemGreen.withAlphaComponent(0.20)
@@ -143,7 +147,7 @@ public final class HighlightableTranscriptView: UITextView {
       string: currentText,
       attributes: [
         .font: transcriptFont,
-        .foregroundColor: UIColor.label,
+        .foregroundColor: transcriptTextColor,
       ]
     )
     let totalLength = attributed.length
