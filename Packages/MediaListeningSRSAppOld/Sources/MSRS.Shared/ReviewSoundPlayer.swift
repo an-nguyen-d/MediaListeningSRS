@@ -1,9 +1,9 @@
 import AVFoundation
 
 @MainActor
-enum ReviewSoundPlayer {
+public enum ReviewSoundPlayer {
 
-  enum Sound: String {
+  public enum Sound: String {
     case showCard = "show-card"
     case failCard = "fail-card"
     case passCard = "success-card"
@@ -11,7 +11,7 @@ enum ReviewSoundPlayer {
 
   private static var players: [Sound: AVAudioPlayer] = [:]
 
-  static func play(_ sound: Sound) {
+  public static func play(_ sound: Sound) {
     if let cached = players[sound] {
       cached.currentTime = 0
       cached.play()

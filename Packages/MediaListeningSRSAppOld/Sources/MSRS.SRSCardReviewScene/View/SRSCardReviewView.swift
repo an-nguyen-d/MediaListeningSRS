@@ -131,6 +131,8 @@ final class SRSCardReviewView: UIView {
   private var autoPassTimer: Timer?
   private var autoPassStartDate: Date?
   private var autoPassCancelled = false
+  private var wasAutoFlipped = false
+  private var backAudioHasPlayedThrough = false
 
   private var buttonHeightConstraints: [NSLayoutConstraint] = []
   private var videoStageAspectConstraint: NSLayoutConstraint?
@@ -290,7 +292,7 @@ final class SRSCardReviewView: UIView {
     return button
   }
 
-  private func handleSpeedDelta(_ delta: Double) {
+  func handleSpeedDelta(_ delta: Double) {
     let newSpeed = max(0.25, min(2.0, (playbackSpeed * 100 + delta * 100).rounded() / 100))
     guard newSpeed != playbackSpeed else { return }
     playbackSpeed = newSpeed
@@ -1012,6 +1014,8 @@ final class SRSCardReviewView: UIView {
     resetGradeButtonHighlights()
     stopAutoPassTimer()
     autoPassCancelled = false
+    wasAutoFlipped = false
+    backAudioHasPlayedThrough = false
     stopAutoFlipTimer()
     autoFlipCancelled = false
     audioHasPlayedThrough = false
@@ -1038,7 +1042,6 @@ final class SRSCardReviewView: UIView {
     frontContainer.isHidden = true
     backContainer.isHidden = false
     playFromStart()
-    startAutoPassTimerIfNeeded()
   }
 
   func replay() {
@@ -1101,10 +1104,9 @@ final class SRSCardReviewView: UIView {
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     let isDirectTouch = event?.type == .touches
     if isDirectTouch {
-      if autoPassTimer != nil {
+      if isShowingBack {
         cancelAutoPass()
-      }
-      if !isShowingBack {
+      } else {
         cancelAutoFlip()
       }
     }
@@ -1285,6 +1287,11 @@ final class SRSCardReviewView: UIView {
       startAutoFlipTimerIfNeeded()
     }
 
+    if isShowingBack && wasAutoFlipped && !backAudioHasPlayedThrough {
+      backAudioHasPlayedThrough = true
+      startAutoPassTimerIfNeeded()
+    }
+
     if MSRSAppSettings.autoLoopVideo {
       let workItem = DispatchWorkItem { [weak self] in
         self?.playFromStart()
@@ -1409,7 +1416,6 @@ final class SRSCardReviewView: UIView {
   }
 
   private func cancelAutoPass() {
-    guard autoPassTimer != nil else { return }
     autoPassCancelled = true
     stopAutoPassTimer()
   }
@@ -1465,6 +1471,7 @@ final class SRSCardReviewView: UIView {
 
     if elapsed >= delay {
       stopAutoFlipTimer()
+      wasAutoFlipped = true
       onRevealBackTapped?()
     }
   }

@@ -436,6 +436,9 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
       14: ("E", GlobalHotkey.commandOptionE),
       15: ("R", GlobalHotkey.commandOptionR),
       17: ("T", GlobalHotkey.commandOptionT),
+      16: ("Y", GlobalHotkey.commandOptionY),
+      32: ("U", GlobalHotkey.commandOptionU),
+      34: ("I", GlobalHotkey.commandOptionI),
     ]
 
     let callback: CGEventTapCallBack = { _, _, event, refcon in
@@ -481,7 +484,7 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
     let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
     CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
     CGEvent.tapEnable(tap: eventTap, enable: true)
-    print("[GlobalHotkey] Event tap registered for ⌘⌥ Q/W/E/R/T")
+    print("[GlobalHotkey] Event tap registered for ⌘⌥ Q/W/E/R/T/Y/U/I")
     #endif
   }
 

@@ -119,7 +119,7 @@ public enum MSRSAppSettings {
     }
   }
 
-  public static let autoPassDelayMin: Double = 1
+  public static let autoPassDelayMin: Double = 0.2
   public static let autoPassDelayMax: Double = 10
   public static let autoPassDelayDefault: Double = 5
 
@@ -133,7 +133,7 @@ public enum MSRSAppSettings {
     set { UserDefaults.standard.set(newValue, forKey: autoFlipEnabledKey) }
   }
 
-  public static let autoFlipDelayMin: Double = 1
+  public static let autoFlipDelayMin: Double = 0.2
   public static let autoFlipDelayMax: Double = 10
   public static let autoFlipDelayDefault: Double = 5
 

@@ -83,6 +83,9 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     nc.addObserver(self, selector: #selector(returnPressed), name: GlobalHotkey.commandOptionQ, object: nil)
     nc.addObserver(self, selector: #selector(failPressed), name: GlobalHotkey.commandOptionW, object: nil)
     nc.addObserver(self, selector: #selector(passPressed), name: GlobalHotkey.commandOptionE, object: nil)
+    nc.addObserver(self, selector: #selector(speedDownPressed), name: GlobalHotkey.commandOptionY, object: nil)
+    nc.addObserver(self, selector: #selector(speedUpPressed), name: GlobalHotkey.commandOptionU, object: nil)
+    nc.addObserver(self, selector: #selector(spacePressed), name: GlobalHotkey.commandOptionI, object: nil)
   }
 
   public override func viewDidAppear(_ animated: Bool) {
@@ -127,6 +130,14 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     ReviewSoundPlayer.play(.passCard)
     pendingGradeOverlayColor = .systemGreen
     interactor.sendAction(.gradedAndNext(.pass))
+  }
+
+  @objc private func speedDownPressed() {
+    contentView.handleSpeedDelta(-0.1)
+  }
+
+  @objc private func speedUpPressed() {
+    contentView.handleSpeedDelta(0.1)
   }
 
   @objc private func doneTapped() {

@@ -58,6 +58,14 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
     loadInstructions()
     interactor.sendAction(.viewDidLoad)
     showPlaceholder()
+    observeGlobalHotkeys()
+  }
+
+  private func observeGlobalHotkeys() {
+    let nc = NotificationCenter.default
+    nc.addObserver(self, selector: #selector(nPressed), name: GlobalHotkey.commandOptionW, object: nil)
+    nc.addObserver(self, selector: #selector(yPressed), name: GlobalHotkey.commandOptionE, object: nil)
+    nc.addObserver(self, selector: #selector(spacePressed), name: GlobalHotkey.commandOptionI, object: nil)
   }
 
   public override func viewDidAppear(_ animated: Bool) {
@@ -112,6 +120,7 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
 
   @objc private func yPressed() {
     guard currentDetailVCCandidateID != nil else { return }
+    ReviewSoundPlayer.play(.passCard)
     if MSRSAppSettings.requireSkipOrMakeCardConfirmation {
       askMakeCardConfirmation(for: currentDetailVCCandidateID!)
     } else {
@@ -121,6 +130,7 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
 
   @objc private func nPressed() {
     guard currentDetailVCCandidateID != nil else { return }
+    ReviewSoundPlayer.play(.failCard)
     if MSRSAppSettings.requireSkipOrMakeCardConfirmation {
       askSkipConfirmation(for: currentDetailVCCandidateID!)
     } else {
