@@ -90,9 +90,7 @@ public final class MediaSourcesListVC: UIViewController, MediaSourcesListDisplay
 
   func displayNavigateToImportPicker() {
     let pickerVC = MediaSourceImportPickerVC(dependencies: dependencies)
-    pickerVC.onImportSucceeded = { [weak self] _ in
-      self?.dismiss(animated: true)
-    }
+    pickerVC.onImportSucceeded = { _ in }
     let nav = UINavigationController(rootViewController: pickerVC)
     pickerVC.navigationItem.leftBarButtonItem = UIBarButtonItem(
       barButtonSystemItem: .cancel,

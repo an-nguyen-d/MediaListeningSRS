@@ -23,6 +23,7 @@ public enum ProcessingQueueModels {
   public enum Action {
     case viewDidLoad
     case rowTapped(MediaSourceCardCandidateModel.ID)
+    case createAllTapped
   }
 
   public struct Row: Sendable, Equatable {

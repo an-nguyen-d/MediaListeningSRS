@@ -5,6 +5,7 @@ import MSRS_SharedModels
 final class ProcessingQueueView: UIView {
 
   var onRowTapped: ((MediaSourceCardCandidateModel.ID) -> Void)?
+  var onCreateAllTapped: (() -> Void)?
 
   let detailContainerView = UIView()
 
@@ -19,6 +20,8 @@ final class ProcessingQueueView: UIView {
 
   private let progressLabel = UILabel()
   private let progressSeparatorView = UIView()
+  private let createAllButton = UIButton(type: .system)
+  private let createAllSeparatorView = UIView()
   private let tableView = UITableView(frame: .zero, style: .insetGrouped)
   private let emptyLabel = UILabel()
   private let separatorView = UIView()
@@ -31,6 +34,7 @@ final class ProcessingQueueView: UIView {
     super.init(frame: frame)
     backgroundColor = .systemBackground
     setUpProgressLabel()
+    setUpCreateAllBar()
     setUpTableView()
     setUpDetailContainer()
     setUpInstructionsPanel()
@@ -56,6 +60,28 @@ final class ProcessingQueueView: UIView {
     progressSeparatorView.backgroundColor = .separator
     addSubview(progressSeparatorView)
     progressSeparatorView.translatesAutoresizingMaskIntoConstraints = false
+  }
+
+  private func setUpCreateAllBar() {
+    var config = UIButton.Configuration.tinted()
+    config.title = "Create All"
+    config.image = UIImage(systemName: "plus.circle.fill")
+    config.imagePadding = 6
+    config.baseForegroundColor = .systemGreen
+    config.baseBackgroundColor = .systemGreen
+    config.buttonSize = .small
+    createAllButton.configuration = config
+    createAllButton.addTarget(self, action: #selector(createAllButtonTapped), for: .touchUpInside)
+    addSubview(createAllButton)
+    createAllButton.translatesAutoresizingMaskIntoConstraints = false
+
+    createAllSeparatorView.backgroundColor = .separator
+    addSubview(createAllSeparatorView)
+    createAllSeparatorView.translatesAutoresizingMaskIntoConstraints = false
+  }
+
+  @objc private func createAllButtonTapped() {
+    onCreateAllTapped?()
   }
 
   private func setUpTableView() {
@@ -97,7 +123,7 @@ final class ProcessingQueueView: UIView {
 
   private func setUpConstraints() {
     NSLayoutConstraint.activate([
-      progressLabel.topAnchor.constraint(equalTo: topAnchor),
+      progressLabel.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
       progressLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
       progressLabel.widthAnchor.constraint(equalToConstant: 360),
       progressLabel.heightAnchor.constraint(equalToConstant: 36),
@@ -107,7 +133,15 @@ final class ProcessingQueueView: UIView {
       progressSeparatorView.widthAnchor.constraint(equalToConstant: 360),
       progressSeparatorView.heightAnchor.constraint(equalToConstant: 0.5),
 
-      tableView.topAnchor.constraint(equalTo: progressSeparatorView.bottomAnchor),
+      createAllButton.topAnchor.constraint(equalTo: progressSeparatorView.bottomAnchor, constant: 8),
+      createAllButton.centerXAnchor.constraint(equalTo: progressLabel.centerXAnchor),
+
+      createAllSeparatorView.topAnchor.constraint(equalTo: createAllButton.bottomAnchor, constant: 8),
+      createAllSeparatorView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      createAllSeparatorView.widthAnchor.constraint(equalToConstant: 360),
+      createAllSeparatorView.heightAnchor.constraint(equalToConstant: 0.5),
+
+      tableView.topAnchor.constraint(equalTo: createAllSeparatorView.bottomAnchor),
       tableView.leadingAnchor.constraint(equalTo: leadingAnchor),
       tableView.widthAnchor.constraint(equalToConstant: 360),
       tableView.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -193,8 +227,18 @@ final class ProcessingQueueView: UIView {
     progressLabel.text = "\(completedCount)/\(totalCount)  \(percentage)%"
   }
 
+  var currentRows: [ProcessingQueueModels.Row] { rows }
+
+  func setCreateAllEnabled(_ enabled: Bool) {
+    createAllButton.isEnabled = enabled
+    createAllButton.alpha = enabled ? 1 : 0.5
+  }
+
   private func updateEmptyState() {
-    emptyLabel.isHidden = !rows.isEmpty
+    let empty = rows.isEmpty
+    emptyLabel.isHidden = !empty
+    createAllButton.isHidden = empty
+    createAllSeparatorView.isHidden = empty
   }
 }
 

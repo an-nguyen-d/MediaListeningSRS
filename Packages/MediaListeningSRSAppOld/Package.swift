@@ -280,6 +280,7 @@ enum PackageTarget: String, CaseIterable {
         dependencies: createTargetDependencies(
           .CandidateDetailScene,
           .ClipExportService,
+          .ClipStorageClient,
           .MediaListeningSRSDatabaseClient,
           .Shared,
           .SharedModels
@@ -288,6 +289,7 @@ enum PackageTarget: String, CaseIterable {
           PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
           PackageDependency.JapaneseMediaLibrary.Product.JMLSharedModels.targetDependency,
           PackageDependency.MediaWordBankTagger.Product.METGDatabaseClient.targetDependency,
+          PackageDependency.MediaWordBankTagger.Product.SharedModels.targetDependency,
           PackageDependency.iYomi.Product.DictionaryClient.targetDependency,
           PackageDependency.iYomi.Product.JapaneseParserClient.targetDependency,
         ]

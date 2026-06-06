@@ -1,4 +1,5 @@
 import UIKit
+import UserNotifications
 import JML_JMLDatabaseClient
 import MSRS_CandidateDetailScene
 import MSRS_Shared
@@ -20,6 +21,7 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
   private static let instructionsUserDefaultsKeyPrefix = "MSRS.ProcessingQueue.instructions"
 
   private weak var activeConfirmationPopup: PopupOverlayView?
+  private weak var createAllOverlay: PopupOverlayView?
   private var pendingConfirmAction: (() -> Void)?
 
   public init(
@@ -32,8 +34,7 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
     self.interactor = ProcessingQueueInteractor(
       presenter: presenter,
       mediaSourceID: mediaSourceID,
-      mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
-      jmlDatabaseClient: dependencies.jmlDatabaseClient
+      dependencies: dependencies
     )
     super.init(nibName: nil, bundle: nil)
     presenter.displayer = self
@@ -54,6 +55,15 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
     }
     contentView.onInstructionsSaveRequested = { [weak self] text in
       self?.saveInstructions(text)
+    }
+    contentView.onCreateAllTapped = { [weak self] in
+      self?.confirmCreateAll()
+    }
+    interactor.onCreateAllProgress = { [weak self] completed, total in
+      self?.updateCreateAllProgress(completed: completed, total: total)
+    }
+    interactor.onCreateAllFinished = { [weak self] created, errors in
+      self?.handleCreateAllFinished(created: created, errors: errors)
     }
     loadInstructions()
     interactor.sendAction(.viewDidLoad)
@@ -343,5 +353,76 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
 
   private func saveInstructions(_ text: String) {
     UserDefaults.standard.set(text, forKey: instructionsUserDefaultsKey)
+  }
+
+  // MARK: - Create All
+
+  private func confirmCreateAll() {
+    let rows = contentView.currentRows
+    guard !rows.isEmpty else { return }
+    let alert = UIAlertController(
+      title: "Create All Cards",
+      message: "This will create cards for all \(rows.count) remaining subtitles. Continue?",
+      preferredStyle: .alert
+    )
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    alert.addAction(UIAlertAction(title: "Create All", style: .default) { [weak self] _ in
+      self?.startCreateAll()
+    })
+    present(alert, animated: true)
+  }
+
+  private func startCreateAll() {
+    removeCurrentDetailVC()
+    contentView.setSelectedRowID(nil)
+    contentView.setCreateAllEnabled(false)
+
+    let progressView = CreateAllProgressView()
+    progressView.update(completed: 0, total: contentView.currentRows.count)
+    let overlay = PopupOverlayView.present(content: progressView, in: view)
+    createAllOverlay = overlay
+
+    interactor.sendAction(.createAllTapped)
+  }
+
+  private func updateCreateAllProgress(completed: Int, total: Int) {
+    guard let overlay = createAllOverlay,
+          let progressView = overlay.subviews.compactMap({ $0 as? CreateAllProgressView }).first else { return }
+    progressView.update(completed: completed, total: total)
+  }
+
+  private func handleCreateAllFinished(created: Int, errors: Int) {
+    contentView.setCreateAllEnabled(true)
+
+    if MSRSAppSettings.reviewFeedbackEffectsEnabled {
+      ReviewSoundPlayer.play(.passCard)
+    }
+
+    guard let overlay = createAllOverlay,
+          let progressView = overlay.subviews.compactMap({ $0 as? CreateAllProgressView }).first else { return }
+    progressView.showCompleted(created: created, errors: errors) { [weak self] in
+      self?.createAllOverlay?.dismiss()
+      self?.createAllOverlay = nil
+      self?.showPlaceholder()
+    }
+
+    sendCreateAllLocalNotification(created: created, errors: errors)
+  }
+
+  private func sendCreateAllLocalNotification(created: Int, errors: Int) {
+    let content = UNMutableNotificationContent()
+    content.title = "Create All Complete"
+    if errors > 0 {
+      content.body = "Created \(created) cards with \(errors) errors."
+    } else {
+      content.body = "Successfully created \(created) cards."
+    }
+    content.sound = .default
+    let request = UNNotificationRequest(
+      identifier: "MSRS.createAll.\(UUID().uuidString)",
+      content: content,
+      trigger: nil
+    )
+    UNUserNotificationCenter.current().add(request)
   }
 }

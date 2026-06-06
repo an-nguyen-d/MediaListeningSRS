@@ -39,6 +39,7 @@ final class MediaSourcesListInteractor: MediaSourcesListInteractorProtocol {
       refreshDueCardCount()
     case .viewWillAppear:
       refreshDueCardCount()
+      handleViewDidLoad()
     case .addTapped:
       presenter.presentNavigateToImportPicker()
     case .reviewAllTapped:

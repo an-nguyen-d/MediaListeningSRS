@@ -84,14 +84,13 @@ public final class MediaSourceImportEpisodePickerVC: UIViewController, MediaSour
 
   func displayImportSucceeded(createdSourceID: MediaSourceModel.ID, candidateCount: Int) {
     contentView.setImporting(false)
+    onImportSucceeded?(createdSourceID)
     let alert = UIAlertController(
       title: "Imported",
       message: "Created MediaSource with \(candidateCount) candidate(s)",
       preferredStyle: .alert
     )
-    alert.addAction(.init(title: "OK", style: .default) { [weak self] _ in
-      self?.onImportSucceeded?(createdSourceID)
-    })
+    alert.addAction(.init(title: "OK", style: .default))
     present(alert, animated: true)
   }
 }

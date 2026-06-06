@@ -77,14 +77,13 @@ public final class MediaSourceImportPickerVC: UIViewController, MediaSourceImpor
   }
 
   func displayImportSucceeded(createdSourceID: MediaSourceModel.ID, candidateCount: Int) {
+    onImportSucceeded?(createdSourceID)
     let alert = UIAlertController(
       title: "Imported",
       message: "Created MediaSource with \(candidateCount) candidate(s)",
       preferredStyle: .alert
     )
-    alert.addAction(.init(title: "OK", style: .default) { [weak self] _ in
-      self?.onImportSucceeded?(createdSourceID)
-    })
+    alert.addAction(.init(title: "OK", style: .default))
     present(alert, animated: true)
   }
 
@@ -95,7 +94,6 @@ public final class MediaSourceImportPickerVC: UIViewController, MediaSourceImpor
       dependencies: dependencies
     )
     episodePicker.onImportSucceeded = { [weak self] createdSourceID in
-      self?.navigationController?.popToViewController(self!, animated: false)
       self?.onImportSucceeded?(createdSourceID)
     }
     navigationController?.pushViewController(episodePicker, animated: true)
