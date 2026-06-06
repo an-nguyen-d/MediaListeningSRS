@@ -136,9 +136,18 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     let ratingRawValue: Int = (grade == .fail) ? 1 : 3
     Task { [mediaListeningSRSDatabaseClient, presenter] in
       do {
-        _ = try await mediaListeningSRSDatabaseClient.srsCard.recordReview(
+        let response = try await mediaListeningSRSDatabaseClient.srsCard.recordReview(
           .init(cardID: card.id, ratingRawValue: ratingRawValue, listenCount: listenCount)
         )
+        let updated = response.updatedModel
+        if grade == .pass,
+           updated.playbackSpeed < 1.0,
+           updated.consecutiveCorrectAtCurrentSpeed >= 2 {
+          let newSpeed = min(1.0, (updated.playbackSpeed * 100 + 5).rounded() / 100)
+          try? await mediaListeningSRSDatabaseClient.srsCard.updatePlaybackSpeed(
+            .init(cardID: card.id, speed: newSpeed)
+          )
+        }
         await MainActor.run { self.advanceToNextCard() }
       } catch {
         await MainActor.run {
