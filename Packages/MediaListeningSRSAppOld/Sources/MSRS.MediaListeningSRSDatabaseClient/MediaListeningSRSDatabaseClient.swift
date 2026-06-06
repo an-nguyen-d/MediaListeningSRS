@@ -259,9 +259,11 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
         public let cardID: SRSCardModel.ID
         /// FSRS rating raw value (1=again, 2=hard, 3=good, 4=easy). Manual=0 is not allowed.
         public let ratingRawValue: Int
-        public init(cardID: SRSCardModel.ID, ratingRawValue: Int) {
+        public let listenCount: Int
+        public init(cardID: SRSCardModel.ID, ratingRawValue: Int, listenCount: Int) {
           self.cardID = cardID
           self.ratingRawValue = ratingRawValue
+          self.listenCount = listenCount
         }
       }
       public struct Response: Sendable, Equatable {
@@ -450,6 +452,54 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
 
     public var suspendCard: @Sendable (SuspendCard.Request) async throws -> SuspendCard.Response
 
+    public struct RecentReviewEvent: Sendable, Equatable {
+      public let cardID: SRSCardModel.ID
+      public let ratingRawValue: Int
+      public let occurredAt: Date
+      public let listenCount: Int?
+      public let cachedTranscriptText: String
+
+      public init(
+        cardID: SRSCardModel.ID,
+        ratingRawValue: Int,
+        occurredAt: Date,
+        listenCount: Int?,
+        cachedTranscriptText: String
+      ) {
+        self.cardID = cardID
+        self.ratingRawValue = ratingRawValue
+        self.occurredAt = occurredAt
+        self.listenCount = listenCount
+        self.cachedTranscriptText = cachedTranscriptText
+      }
+    }
+
+    public enum FetchRecentReviewEvents {
+      public struct Request: Sendable {
+        public let limit: Int
+        public init(limit: Int) { self.limit = limit }
+      }
+      public struct Response: Sendable, Equatable {
+        public let events: [RecentReviewEvent]
+        public init(events: [RecentReviewEvent]) { self.events = events }
+      }
+    }
+
+    public var fetchRecentReviewEvents: @Sendable (FetchRecentReviewEvents.Request) async throws -> FetchRecentReviewEvents.Response
+
+    public enum FetchReviewEventsForCard {
+      public struct Request: Sendable {
+        public let cardID: SRSCardModel.ID
+        public init(cardID: SRSCardModel.ID) { self.cardID = cardID }
+      }
+      public struct Response: Sendable, Equatable {
+        public let events: [RecentReviewEvent]
+        public init(events: [RecentReviewEvent]) { self.events = events }
+      }
+    }
+
+    public var fetchReviewEventsForCard: @Sendable (FetchReviewEventsForCard.Request) async throws -> FetchReviewEventsForCard.Response
+
     public init(
       create: @Sendable @escaping (Create.Request) async throws -> Create.Response,
       delete: @Sendable @escaping (Delete.Request) async throws -> Delete.Response,
@@ -466,7 +516,9 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       batchUpdateCachedLabelRanges: @Sendable @escaping (BatchUpdateCachedLabelRanges.Request) async throws -> BatchUpdateCachedLabelRanges.Response,
       fetchAllCards: @Sendable @escaping (FetchAllCards.Request) async throws -> FetchAllCards.Response,
       countDueCards: @Sendable @escaping (CountDueCards.Request) async throws -> CountDueCards.Response,
-      suspendCard: @Sendable @escaping (SuspendCard.Request) async throws -> SuspendCard.Response
+      suspendCard: @Sendable @escaping (SuspendCard.Request) async throws -> SuspendCard.Response,
+      fetchRecentReviewEvents: @Sendable @escaping (FetchRecentReviewEvents.Request) async throws -> FetchRecentReviewEvents.Response,
+      fetchReviewEventsForCard: @Sendable @escaping (FetchReviewEventsForCard.Request) async throws -> FetchReviewEventsForCard.Response
     ) {
       self.create = create
       self.delete = delete
@@ -484,6 +536,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       self.fetchAllCards = fetchAllCards
       self.countDueCards = countDueCards
       self.suspendCard = suspendCard
+      self.fetchRecentReviewEvents = fetchRecentReviewEvents
+      self.fetchReviewEventsForCard = fetchReviewEventsForCard
     }
   }
   public var srsCard: SRSCard

@@ -362,6 +362,12 @@ extension MediaListeningSRSDatabaseClient {
       }
     }
 
+    migrator.registerMigration("14") { db in
+      try db.alter(table: "srsReviewEventRecord") { t in
+        t.add(column: "listenCount", .integer)
+      }
+    }
+
     return migrator
   }
 }

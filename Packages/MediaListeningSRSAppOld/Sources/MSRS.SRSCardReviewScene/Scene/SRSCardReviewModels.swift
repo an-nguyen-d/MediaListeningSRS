@@ -22,13 +22,14 @@ public enum SRSCardReviewModels {
     case replayTapped
     case termTapped(Int64)
     case markTermAsFullyKnown(Int64)
-    case gradedAndNext(Grade)
+    case gradedAndNext(Grade, listenCount: Int)
     case frontVideoVisibilityChanged(SRSCardModel.FrontVideoVisibility)
     case playbackSpeedChanged(Double)
     case submitTypedAnswer(String)
     case transcriptTappedAtCharacterIndex(Int)
     case autoLoopVideoChanged(Bool)
     case suspendCard
+    case showCardHistory
   }
 
   public enum Grade: Sendable, Equatable {

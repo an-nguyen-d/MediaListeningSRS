@@ -204,7 +204,8 @@ extension MediaListeningSRSDatabaseClient {
             stabilityAfterReview: updatedFSRSCard.stability,
             difficultyAfterReview: updatedFSRSCard.difficulty,
             dueDateAfterReview: updatedFSRSCard.due,
-            occurredAt: now
+            occurredAt: now,
+            listenCount: request.listenCount
           )
           try event.insert(db)
 
@@ -383,6 +384,50 @@ extension MediaListeningSRSDatabaseClient {
           record.lastUpdatedAt = Date()
           try record.update(db)
           return .init()
+        }
+      },
+      fetchRecentReviewEvents: { request in
+        try await databaseWriter.read { db in
+          let rows = try Row.fetchAll(db, sql: """
+            SELECT e.cardID, e.ratingRawValue, e.occurredAt, e.listenCount,
+                   c.cachedTranscriptText
+            FROM srsReviewEventRecord e
+            JOIN srsCardRecord c ON c.id = e.cardID
+            ORDER BY e.occurredAt DESC
+            LIMIT ?
+          """, arguments: [request.limit])
+          let events: [MediaListeningSRSDatabaseClient.SRSCard.RecentReviewEvent] = rows.map { row in
+            .init(
+              cardID: .init(rawValue: row["cardID"]),
+              ratingRawValue: row["ratingRawValue"],
+              occurredAt: row["occurredAt"],
+              listenCount: row["listenCount"],
+              cachedTranscriptText: row["cachedTranscriptText"]
+            )
+          }
+          return .init(events: events)
+        }
+      },
+      fetchReviewEventsForCard: { request in
+        try await databaseWriter.read { db in
+          let rows = try Row.fetchAll(db, sql: """
+            SELECT e.cardID, e.ratingRawValue, e.occurredAt, e.listenCount,
+                   c.cachedTranscriptText
+            FROM srsReviewEventRecord e
+            JOIN srsCardRecord c ON c.id = e.cardID
+            WHERE e.cardID = ?
+            ORDER BY e.occurredAt DESC
+          """, arguments: [request.cardID.rawValue])
+          let events: [MediaListeningSRSDatabaseClient.SRSCard.RecentReviewEvent] = rows.map { row in
+            .init(
+              cardID: .init(rawValue: row["cardID"]),
+              ratingRawValue: row["ratingRawValue"],
+              occurredAt: row["occurredAt"],
+              listenCount: row["listenCount"],
+              cachedTranscriptText: row["cachedTranscriptText"]
+            )
+          }
+          return .init(events: events)
         }
       }
     )

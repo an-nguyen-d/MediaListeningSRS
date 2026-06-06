@@ -15,6 +15,7 @@ public final class StudyStatsVC: UIViewController {
   private var last7DaysData: [DailyCardBarChartView.DayData] = []
   private var last7DaysTimeData: [DailyTimeBarChartView.DayData] = []
   private var recentSessions: [StudySessionModel] = []
+  private var recentReviewEvents: [MediaListeningSRSDatabaseClient.SRSCard.RecentReviewEvent] = []
   private var latestSnapshot: DailyAggregateSnapshotModel?
   private var recentSnapshots: [DailyAggregateSnapshotModel] = []
 
@@ -105,6 +106,10 @@ public final class StudyStatsVC: UIViewController {
           timeChartData.append(.init(label: label, sessions: sessions))
         }
 
+        let recentReviewsResponse = try await dbClient.srsCard.fetchRecentReviewEvents(
+          .init(limit: 10)
+        )
+
         await MainActor.run {
           self.todayDuration = todayResponse.models.reduce(0) {
             $0 + $1.endedAt.timeIntervalSince($1.startedAt)
@@ -118,7 +123,8 @@ public final class StudyStatsVC: UIViewController {
           self.last7DaysTimeData = timeChartData
           self.timeBarChartView.setData(timeChartData)
 
-          self.recentSessions = recentModels.reversed()
+          self.recentSessions = Array(recentModels.reversed().prefix(10))
+          self.recentReviewEvents = recentReviewsResponse.events
 
           let snapshots = snapshotsResponse.models
           self.latestSnapshot = snapshots.last
@@ -172,11 +178,17 @@ public final class StudyStatsVC: UIViewController {
     f.dateFormat = "EEE"
     return f
   }()
+
+  private static let relativeFormatter: RelativeDateTimeFormatter = {
+    let f = RelativeDateTimeFormatter()
+    f.unitsStyle = .short
+    return f
+  }()
 }
 
 extension StudyStatsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 6 }
+  public func numberOfSections(in tableView: UITableView) -> Int { 7 }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     switch section {
@@ -184,8 +196,9 @@ extension StudyStatsVC: UITableViewDataSource {
     case 1: return 1
     case 2: return 1
     case 3: return max(recentSessions.count, 1)
-    case 4: return latestSnapshot != nil ? 5 : 1
-    case 5: return max(recentSnapshots.count, 1)
+    case 4: return max(recentReviewEvents.count, 1)
+    case 5: return latestSnapshot != nil ? 5 : 1
+    case 6: return max(recentSnapshots.count, 1)
     default: return 0
     }
   }
@@ -195,9 +208,10 @@ extension StudyStatsVC: UITableViewDataSource {
     case 0: return "Today"
     case 1: return "Cards Reviewed (Last 7 Days)"
     case 2: return "Time Studied (Last 7 Days)"
-    case 3: return "Recent Sessions (30 days)"
-    case 4: return "Deck Snapshot (Latest)"
-    case 5: return "Snapshot History (30 days)"
+    case 3: return "Recent Sessions"
+    case 4: return "Recent Reviews"
+    case 5: return "Deck Snapshot (Latest)"
+    case 6: return "Snapshot History (30 days)"
     default: return nil
     }
   }
@@ -268,12 +282,38 @@ extension StudyStatsVC: UITableViewDataSource {
       let duration = session.endedAt.timeIntervalSince(session.startedAt)
       let startStr = Self.dateFormatter.string(from: session.startedAt)
       let endStr = Self.timeOnlyFormatter.string(from: session.endedAt)
-      cell.textLabel?.text = "\(startStr) – \(endStr)"
+      let relativeStr = Self.relativeFormatter.localizedString(for: session.startedAt, relativeTo: Date())
+      cell.textLabel?.text = "\(startStr) – \(endStr) (\(relativeStr))"
       cell.detailTextLabel?.text = "\(formatDuration(duration))  ·  \(session.cardsReviewed) cards"
       cell.detailTextLabel?.textColor = .secondaryLabel
       return cell
 
     case 4:
+      if recentReviewEvents.isEmpty {
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        cell.textLabel?.text = "No reviews yet"
+        cell.textLabel?.textColor = .secondaryLabel
+        cell.selectionStyle = .none
+        return cell
+      }
+      let event = recentReviewEvents[indexPath.row]
+      let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      let grade = event.ratingRawValue <= 2 ? "Fail" : "Pass"
+      let gradeColor: UIColor = event.ratingRawValue <= 2 ? .systemRed : .systemGreen
+      let relativeStr = Self.relativeFormatter.localizedString(for: event.occurredAt, relativeTo: Date())
+      let transcript = event.cachedTranscriptText.isEmpty ? "(no transcript)" : event.cachedTranscriptText
+      cell.textLabel?.text = transcript
+      cell.textLabel?.numberOfLines = 2
+      var detail = "\(grade) · \(relativeStr)"
+      if let listens = event.listenCount {
+        detail += " · \(listens) listen\(listens == 1 ? "" : "s")"
+      }
+      cell.detailTextLabel?.text = detail
+      cell.detailTextLabel?.textColor = gradeColor
+      return cell
+
+    case 5:
       guard let snapshot = latestSnapshot else {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No snapshots yet"
@@ -306,7 +346,7 @@ extension StudyStatsVC: UITableViewDataSource {
       }
       return cell
 
-    case 5:
+    case 6:
       if recentSnapshots.isEmpty {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No snapshots yet"

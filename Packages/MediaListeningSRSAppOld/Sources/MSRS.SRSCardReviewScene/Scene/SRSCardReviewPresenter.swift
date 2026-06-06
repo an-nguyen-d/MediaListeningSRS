@@ -1,4 +1,5 @@
 import UIKit
+import MSRS_MediaListeningSRSDatabaseClient
 
 @MainActor
 protocol SRSCardReviewDisplayer: AnyObject {
@@ -13,6 +14,7 @@ protocol SRSCardReviewDisplayer: AnyObject {
   func displayEmptyDeck()
   func displayDeckCompleted()
   func displayError(_ message: String)
+  func displayCardHistory(_ events: [MediaListeningSRSDatabaseClient.SRSCard.RecentReviewEvent])
 }
 
 @MainActor
@@ -62,5 +64,9 @@ final class SRSCardReviewPresenter {
 
   func presentError(_ message: String) {
     displayer?.displayError(message)
+  }
+
+  func presentCardHistory(_ events: [MediaListeningSRSDatabaseClient.SRSCard.RecentReviewEvent]) {
+    displayer?.displayCardHistory(events)
   }
 }

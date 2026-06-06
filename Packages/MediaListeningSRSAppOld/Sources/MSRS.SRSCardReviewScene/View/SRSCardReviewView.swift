@@ -16,6 +16,7 @@ final class SRSCardReviewView: UIView {
   var onAutoLoopVideoChanged: ((Bool) -> Void)?
   var onDismissReview: (() -> Void)?
   var onSuspendCard: (() -> Void)?
+  var onShowCardHistory: (() -> Void)?
 
   let isCondensedMode: Bool
 
@@ -65,10 +66,12 @@ final class SRSCardReviewView: UIView {
   private let backTranscriptView = HighlightableTranscriptView()
   private let backInflectionAnnotationsLabel = UILabel()
   private let backTranslationLabel = UILabel()
+  private let backListenCountLabel = UILabel()
   private let backLoopButton = UIButton(type: .system)
   private let backFailButton = UIButton(type: .system)
   private let backPassButton = UIButton(type: .system)
   private let backSuspendButton = UIButton(type: .system)
+  private let backHistoryButton = UIButton(type: .system)
 
   // MARK: - LLM Result
 
@@ -89,6 +92,7 @@ final class SRSCardReviewView: UIView {
   private let settingsToggleButton = UIButton(type: .system)
   private let settingsDismissButton = UIButton(type: .system)
   private let settingsSuspendButton = UIButton(type: .system)
+  private let settingsHistoryButton = UIButton(type: .system)
   private let settingsHideButton = UIButton(type: .system)
   private let buttonHeightSlider = UISlider()
   private let buttonHeightValueLabel = UILabel()
@@ -136,6 +140,8 @@ final class SRSCardReviewView: UIView {
   private var autoPassCancelled = false
   private var wasAutoFlipped = false
   private var backAudioHasPlayedThrough = false
+
+  private(set) var listenCount: Int = 1
 
   private var buttonHeightConstraints: [NSLayoutConstraint] = []
   private var videoStageAspectConstraint: NSLayoutConstraint?
@@ -429,6 +435,10 @@ final class SRSCardReviewView: UIView {
   private func setUpBack() {
     backContainer.translatesAutoresizingMaskIntoConstraints = false
 
+    backListenCountLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+    backListenCountLabel.textColor = isCondensedMode ? .white.withAlphaComponent(0.6) : .tertiaryLabel
+    backListenCountLabel.translatesAutoresizingMaskIntoConstraints = false
+
     backTranscriptView.transcriptFont = .systemFont(ofSize: MSRSAppSettings.reviewTranscriptFontSize, weight: .regular)
     if isCondensedMode {
       backTranscriptView.transcriptTextColor = .white
@@ -468,6 +478,16 @@ final class SRSCardReviewView: UIView {
     backSuspendButton.configuration = suspendConfig
     backSuspendButton.translatesAutoresizingMaskIntoConstraints = false
     backSuspendButton.addTarget(self, action: #selector(handleSuspendTap), for: .touchUpInside)
+
+    var historyConfig = UIButton.Configuration.tinted()
+    historyConfig.title = "History"
+    historyConfig.baseBackgroundColor = .systemBlue
+    historyConfig.baseForegroundColor = .systemBlue
+    historyConfig.cornerStyle = .medium
+    historyConfig.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14)
+    backHistoryButton.configuration = historyConfig
+    backHistoryButton.translatesAutoresizingMaskIntoConstraints = false
+    backHistoryButton.addTarget(self, action: #selector(handleHistoryTap), for: .touchUpInside)
   }
 
   private func setUpLLMResult() {
@@ -588,7 +608,7 @@ final class SRSCardReviewView: UIView {
     frontContainer.addSubview(frontBottomRow)
     frontContainer.addSubview(frontAnswerRow)
 
-    let backTopRow = UIStackView(arrangedSubviews: [backLoopButton, backSuspendButton])
+    let backTopRow = UIStackView(arrangedSubviews: [backLoopButton, backHistoryButton, backSuspendButton])
     backTopRow.axis = .horizontal
     backTopRow.spacing = 16
     backTopRow.translatesAutoresizingMaskIntoConstraints = false
@@ -602,6 +622,7 @@ final class SRSCardReviewView: UIView {
     backContainer.addSubview(backTopRow)
     backContainer.addSubview(backSpeedRow)
     backContainer.addSubview(backStreakLabel)
+    backContainer.addSubview(backListenCountLabel)
     backContainer.addSubview(backTranscriptView)
     backContainer.addSubview(backInflectionAnnotationsLabel)
     backContainer.addSubview(backTranslationLabel)
@@ -656,6 +677,9 @@ final class SRSCardReviewView: UIView {
 
       backStreakLabel.topAnchor.constraint(equalTo: backSpeedRow.bottomAnchor, constant: 4),
       backStreakLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+
+      backListenCountLabel.centerYAnchor.constraint(equalTo: backStreakLabel.centerYAnchor),
+      backListenCountLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
       backTranscriptView.topAnchor.constraint(equalTo: backStreakLabel.bottomAnchor, constant: 12),
       backTranscriptView.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
@@ -726,6 +750,9 @@ final class SRSCardReviewView: UIView {
     Self.styleAction(settingsSuspendButton, title: "Suspend Card", hotkey: "", backgroundColor: .systemOrange)
     settingsSuspendButton.addTarget(self, action: #selector(handleSuspendTap), for: .touchUpInside)
 
+    Self.styleAction(settingsHistoryButton, title: "Card History", hotkey: "", backgroundColor: .systemBlue)
+    settingsHistoryButton.addTarget(self, action: #selector(handleHistoryTap), for: .touchUpInside)
+
     Self.styleAction(settingsDismissButton, title: "Dismiss Review", hotkey: "", backgroundColor: .systemRed.withAlphaComponent(0.8))
     settingsDismissButton.addTarget(self, action: #selector(handleDismissReview), for: .touchUpInside)
 
@@ -762,6 +789,7 @@ final class SRSCardReviewView: UIView {
       heightHeaderRow,
       buttonHeightSlider,
       settingsSuspendButton,
+      settingsHistoryButton,
       settingsDismissButton,
       settingsHideButton,
     ])
@@ -801,6 +829,7 @@ final class SRSCardReviewView: UIView {
     frontContainer.addSubview(frontBottomRow)
     frontContainer.addSubview(frontAnswerRow)
 
+    backContainer.addSubview(backListenCountLabel)
     backContainer.addSubview(backTranscriptView)
     backContainer.addSubview(backInflectionAnnotationsLabel)
     backContainer.addSubview(backTranslationLabel)
@@ -861,7 +890,10 @@ final class SRSCardReviewView: UIView {
       backContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -hPad),
       backContainer.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -12),
 
-      backTranscriptView.topAnchor.constraint(equalTo: backContainer.topAnchor),
+      backListenCountLabel.topAnchor.constraint(equalTo: backContainer.topAnchor),
+      backListenCountLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      backTranscriptView.topAnchor.constraint(equalTo: backListenCountLabel.bottomAnchor, constant: 4),
       backTranscriptView.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backTranscriptView.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
@@ -1033,6 +1065,8 @@ final class SRSCardReviewView: UIView {
     autoPassCancelled = false
     wasAutoFlipped = false
     backAudioHasPlayedThrough = false
+    listenCount = 1
+    updateListenCountLabel()
     stopAutoFlipTimer()
     autoFlipCancelled = false
     audioHasPlayedThrough = false
@@ -1271,6 +1305,9 @@ final class SRSCardReviewView: UIView {
         if duration > 0 {
           self.clipProgressBar.setProgress((currentSeconds - self.currentClipStartTime) / duration)
         }
+        if currentSeconds >= self.currentClipEndTime {
+          self.handleClipReachedEnd()
+        }
       }
     }
 
@@ -1299,6 +1336,9 @@ final class SRSCardReviewView: UIView {
     isVideoPlaying = false
     removeEndObserver()
 
+    listenCount += 1
+    updateListenCountLabel()
+
     if !isShowingBack && !audioHasPlayedThrough {
       audioHasPlayedThrough = true
       startAutoFlipTimerIfNeeded()
@@ -1311,7 +1351,8 @@ final class SRSCardReviewView: UIView {
 
     if MSRSAppSettings.autoLoopVideo {
       let workItem = DispatchWorkItem { [weak self] in
-        self?.playFromStart()
+        guard let self else { return }
+        self.playFromStart()
       }
       autoLoopWorkItem = workItem
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
@@ -1320,6 +1361,10 @@ final class SRSCardReviewView: UIView {
       let startCMTime = CMTime(seconds: currentClipStartTime, preferredTimescale: 600)
       player?.seek(to: startCMTime, toleranceBefore: .zero, toleranceAfter: .zero)
     }
+  }
+
+  private func updateListenCountLabel() {
+    backListenCountLabel.text = "Listens: \(listenCount)"
   }
 
   private func removeEndObserver() {
@@ -1450,6 +1495,10 @@ final class SRSCardReviewView: UIView {
 
   @objc private func handleSuspendTap() {
     onSuspendCard?()
+  }
+
+  @objc private func handleHistoryTap() {
+    onShowCardHistory?()
   }
 
   @objc private func handleDismissReview() {

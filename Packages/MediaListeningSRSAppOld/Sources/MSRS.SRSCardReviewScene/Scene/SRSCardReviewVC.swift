@@ -1,4 +1,5 @@
 import UIKit
+import MSRS_MediaListeningSRSDatabaseClient
 import MSRS_Shared
 import MSRS_SharedModels
 
@@ -41,7 +42,8 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
       self?.interactor.sendAction(.revealBackTapped)
     }
     contentView.onGraded = { [weak self] grade in
-      self?.interactor.sendAction(.gradedAndNext(grade))
+      guard let self else { return }
+      self.interactor.sendAction(.gradedAndNext(grade, listenCount: self.contentView.listenCount))
     }
     contentView.onTermTapped = { [weak self] termID in
       self?.contentView.setSelectedTermID(termID)
@@ -67,6 +69,9 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     }
     contentView.onSuspendCard = { [weak self] in
       self?.showSuspendConfirmation()
+    }
+    contentView.onShowCardHistory = { [weak self] in
+      self?.interactor.sendAction(.showCardHistory)
     }
     if contentView.isCondensedMode {
       navigationController?.setNavigationBarHidden(true, animated: false)
@@ -137,7 +142,7 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
       ReviewSoundPlayer.play(.failCard)
       pendingGradeOverlayColor = .systemRed
     }
-    interactor.sendAction(.gradedAndNext(.fail))
+    interactor.sendAction(.gradedAndNext(.fail, listenCount: contentView.listenCount))
   }
 
   @objc private func passPressed() {
@@ -145,7 +150,7 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
       ReviewSoundPlayer.play(.passCard)
       pendingGradeOverlayColor = .systemGreen
     }
-    interactor.sendAction(.gradedAndNext(.pass))
+    interactor.sendAction(.gradedAndNext(.pass, listenCount: contentView.listenCount))
   }
 
   @objc private func speedDownPressed() {
@@ -263,5 +268,12 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
     alert.addAction(.init(title: "OK", style: .default))
     present(alert, animated: true)
+  }
+
+  func displayCardHistory(_ events: [MediaListeningSRSDatabaseClient.SRSCard.RecentReviewEvent]) {
+    let historyVC = CardReviewHistoryVC(events: events)
+    let nav = UINavigationController(rootViewController: historyVC)
+    nav.modalPresentationStyle = .fullScreen
+    present(nav, animated: true)
   }
 }

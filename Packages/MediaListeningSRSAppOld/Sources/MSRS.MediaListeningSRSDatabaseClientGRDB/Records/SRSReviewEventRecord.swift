@@ -10,6 +10,7 @@ public struct SRSReviewEventRecord: Codable, FetchableRecord, MutablePersistable
   public var difficultyAfterReview: Double
   public var dueDateAfterReview: Date
   public var occurredAt: Date
+  public var listenCount: Int?
 
   public mutating func didInsert(_ inserted: InsertionSuccess) {
     id = inserted.rowID

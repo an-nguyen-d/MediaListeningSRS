@@ -66,9 +66,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       handleTermTapped(termID)
     case .markTermAsFullyKnown(let termID):
       handleMarkTermAsFullyKnown(termID)
-    case .gradedAndNext(let grade):
+    case .gradedAndNext(let grade, let listenCount):
       studySessionTracker.recordHeartbeat(isCardReview: true)
-      handleGraded(grade)
+      handleGraded(grade, listenCount: listenCount)
     case .frontVideoVisibilityChanged(let visibility):
       handleFrontVideoVisibilityChanged(visibility)
     case .playbackSpeedChanged(let speed):
@@ -84,6 +84,8 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       persistSettings()
     case .suspendCard:
       handleSuspendCard()
+    case .showCardHistory:
+      handleShowCardHistory()
     }
   }
 
@@ -128,14 +130,14 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     }
   }
 
-  private func handleGraded(_ grade: SRSCardReviewModels.Grade) {
+  private func handleGraded(_ grade: SRSCardReviewModels.Grade, listenCount: Int) {
     guard currentBatchIndex < currentBatch.count else { return }
     let card = currentBatch[currentBatchIndex]
     let ratingRawValue: Int = (grade == .fail) ? 1 : 3
     Task { [mediaListeningSRSDatabaseClient, presenter] in
       do {
         _ = try await mediaListeningSRSDatabaseClient.srsCard.recordReview(
-          .init(cardID: card.id, ratingRawValue: ratingRawValue)
+          .init(cardID: card.id, ratingRawValue: ratingRawValue, listenCount: listenCount)
         )
         await MainActor.run { self.advanceToNextCard() }
       } catch {
@@ -158,6 +160,25 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       } catch {
         await MainActor.run {
           presenter.presentError("Failed to suspend card: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+
+  private func handleShowCardHistory() {
+    guard currentBatchIndex < currentBatch.count else { return }
+    let card = currentBatch[currentBatchIndex]
+    Task { [mediaListeningSRSDatabaseClient, presenter] in
+      do {
+        let response = try await mediaListeningSRSDatabaseClient.srsCard.fetchReviewEventsForCard(
+          .init(cardID: card.id)
+        )
+        await MainActor.run {
+          presenter.presentCardHistory(response.events)
+        }
+      } catch {
+        await MainActor.run {
+          presenter.presentError("Failed to load history: \(error.localizedDescription)")
         }
       }
     }
