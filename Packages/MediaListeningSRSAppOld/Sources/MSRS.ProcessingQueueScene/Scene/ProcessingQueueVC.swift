@@ -120,7 +120,7 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
 
   @objc private func yPressed() {
     guard currentDetailVCCandidateID != nil else { return }
-    ReviewSoundPlayer.play(.passCard)
+    if MSRSAppSettings.reviewFeedbackEffectsEnabled { ReviewSoundPlayer.play(.passCard) }
     if MSRSAppSettings.requireSkipOrMakeCardConfirmation {
       askMakeCardConfirmation(for: currentDetailVCCandidateID!)
     } else {
@@ -130,7 +130,7 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
 
   @objc private func nPressed() {
     guard currentDetailVCCandidateID != nil else { return }
-    ReviewSoundPlayer.play(.failCard)
+    if MSRSAppSettings.reviewFeedbackEffectsEnabled { ReviewSoundPlayer.play(.failCard) }
     if MSRSAppSettings.requireSkipOrMakeCardConfirmation {
       askSkipConfirmation(for: currentDetailVCCandidateID!)
     } else {

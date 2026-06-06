@@ -12,6 +12,8 @@ public final class SettingsVC: UIViewController {
     case condensedMode
     case buttonHeight
     case reviewFontSize
+    case numpadHotkeys
+    case feedbackEffects
     case autoFlip
     case autoPass
     case clipPrefetch
@@ -159,6 +161,14 @@ public final class SettingsVC: UIViewController {
     buttonHeightValueLabel?.text = "\(Int(rounded))pt"
   }
 
+  @objc private func numpadHotkeysToggleChanged(_ sender: UISwitch) {
+    MSRSAppSettings.numpadHotkeysEnabled = sender.isOn
+  }
+
+  @objc private func feedbackEffectsToggleChanged(_ sender: UISwitch) {
+    MSRSAppSettings.reviewFeedbackEffectsEnabled = sender.isOn
+  }
+
   @objc private func autoFlipToggleChanged(_ sender: UISwitch) {
     MSRSAppSettings.autoFlipEnabled = sender.isOn
     tableView.reloadSections(IndexSet(integer: Section.autoFlip.rawValue), with: .none)
@@ -289,6 +299,8 @@ extension SettingsVC: UITableViewDataSource {
     case .condensedMode: return "SRS Review Layout"
     case .buttonHeight: return "SRS Button Height"
     case .reviewFontSize: return "SRS Review Font Size"
+    case .numpadHotkeys: return "Numpad Hotkeys"
+    case .feedbackEffects: return "Review Feedback Effects"
     case .autoFlip: return "Auto-Flip to Back"
     case .autoPass: return "Auto-Pass"
     case .clipPrefetch: return "Clip Prefetch"
@@ -320,6 +332,10 @@ extension SettingsVC: UITableViewDataSource {
       return "Height of the Show Back / Fail / Pass buttons during SRS review. Min \(Int(MSRSAppSettings.srsButtonHeightMin))pt, max \(Int(MSRSAppSettings.srsButtonHeightMax))pt."
     case .reviewFontSize:
       return "Font size for the Japanese transcript and English translation shown on the back of SRS review cards. Changes take effect on the next card."
+    case .numpadHotkeys:
+      return "Adds number key shortcuts during SRS review: 7 = show back, 8 = fail, 9 = pass, 4 = speed −0.1, 5 = play/pause, 6 = speed +0.1."
+    case .feedbackEffects:
+      return "Sound effects and screen flash overlay on grading cards. Applies to both SRS review and candidate processing."
     case .autoFlip:
       return "When enabled, after the audio plays through once, a countdown begins. When it reaches zero, the card automatically flips to show the back. Any tap while on the front cancels the auto-flip."
     case .autoPass:
@@ -458,6 +474,26 @@ extension SettingsVC: UITableViewDataSource {
 
     case .reviewFontSize:
       return buildReviewFontSizeCell(row: indexPath.row)
+
+    case .numpadHotkeys:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.textLabel?.text = "Enable Numpad Hotkeys"
+      cell.selectionStyle = .none
+      let toggle = UISwitch()
+      toggle.isOn = MSRSAppSettings.numpadHotkeysEnabled
+      toggle.addTarget(self, action: #selector(numpadHotkeysToggleChanged(_:)), for: .valueChanged)
+      cell.accessoryView = toggle
+      return cell
+
+    case .feedbackEffects:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.textLabel?.text = "Sound & Flash Effects"
+      cell.selectionStyle = .none
+      let toggle = UISwitch()
+      toggle.isOn = MSRSAppSettings.reviewFeedbackEffectsEnabled
+      toggle.addTarget(self, action: #selector(feedbackEffectsToggleChanged(_:)), for: .valueChanged)
+      cell.accessoryView = toggle
+      return cell
 
     case .autoFlip:
       return buildAutoFlipCell(row: indexPath.row)

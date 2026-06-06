@@ -82,6 +82,8 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       handleTranscriptTappedAtCharacterIndex(index)
     case .autoLoopVideoChanged:
       persistSettings()
+    case .suspendCard:
+      handleSuspendCard()
     }
   }
 
@@ -139,6 +141,23 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       } catch {
         await MainActor.run {
           presenter.presentError("Failed to record review: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+
+  private func handleSuspendCard() {
+    guard currentBatchIndex < currentBatch.count else { return }
+    let card = currentBatch[currentBatchIndex]
+    Task { [mediaListeningSRSDatabaseClient, presenter] in
+      do {
+        _ = try await mediaListeningSRSDatabaseClient.srsCard.suspendCard(
+          .init(cardID: card.id)
+        )
+        await MainActor.run { self.advanceToNextCard() }
+      } catch {
+        await MainActor.run {
+          presenter.presentError("Failed to suspend card: \(error.localizedDescription)")
         }
       }
     }

@@ -219,6 +219,7 @@ extension MediaListeningSRSDatabaseClient {
           let baseSql = """
             SELECT * FROM srsCardRecord
             WHERE clipRelativeFilePath != ''
+              AND isSuspended = 0
               AND (dueDate IS NULL OR dueDate <= ?)
             ORDER BY
               CASE WHEN dueDate IS NOT NULL THEN 0 ELSE 1 END,
@@ -367,9 +368,21 @@ extension MediaListeningSRSDatabaseClient {
           let count = try Int.fetchOne(db, sql: """
             SELECT COUNT(*) FROM srsCardRecord
             WHERE clipRelativeFilePath != ''
+              AND isSuspended = 0
               AND (dueDate IS NULL OR dueDate <= ?)
           """, arguments: [request.asOf]) ?? 0
           return .init(count: count)
+        }
+      },
+      suspendCard: { request in
+        try await databaseWriter.write { db in
+          guard var record = try SRSCardRecord.fetchOne(db, key: request.cardID.rawValue) else {
+            throw MediaListeningSRSDatabaseError.recordNotFound(id: request.cardID.rawValue)
+          }
+          record.isSuspended = true
+          record.lastUpdatedAt = Date()
+          try record.update(db)
+          return .init()
         }
       }
     )

@@ -92,6 +92,8 @@ public enum MSRSAppSettings {
   private static let autoPassDelayKey = "MSRS.autoPassDelay"
   private static let autoFlipEnabledKey = "MSRS.autoFlipEnabled"
   private static let autoFlipDelayKey = "MSRS.autoFlipDelay"
+  private static let numpadHotkeysEnabledKey = "MSRS.numpadHotkeysEnabled"
+  private static let reviewFeedbackEffectsEnabledKey = "MSRS.reviewFeedbackEffectsEnabled"
 
   public static let srsButtonHeightMin: CGFloat = 30
   public static let srsButtonHeightMax: CGFloat = 240
@@ -131,6 +133,19 @@ public enum MSRSAppSettings {
   public static var autoFlipEnabled: Bool {
     get { UserDefaults.standard.bool(forKey: autoFlipEnabledKey) }
     set { UserDefaults.standard.set(newValue, forKey: autoFlipEnabledKey) }
+  }
+
+  public static var numpadHotkeysEnabled: Bool {
+    get { UserDefaults.standard.bool(forKey: numpadHotkeysEnabledKey) }
+    set { UserDefaults.standard.set(newValue, forKey: numpadHotkeysEnabledKey) }
+  }
+
+  public static var reviewFeedbackEffectsEnabled: Bool {
+    get {
+      if UserDefaults.standard.object(forKey: reviewFeedbackEffectsEnabledKey) == nil { return true }
+      return UserDefaults.standard.bool(forKey: reviewFeedbackEffectsEnabledKey)
+    }
+    set { UserDefaults.standard.set(newValue, forKey: reviewFeedbackEffectsEnabledKey) }
   }
 
   public static let autoFlipDelayMin: Double = 0.2

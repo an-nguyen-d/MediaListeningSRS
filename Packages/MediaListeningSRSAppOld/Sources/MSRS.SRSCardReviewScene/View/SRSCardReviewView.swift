@@ -15,6 +15,7 @@ final class SRSCardReviewView: UIView {
   var onTranscriptTappedAtCharacterIndex: ((Int) -> Void)?
   var onAutoLoopVideoChanged: ((Bool) -> Void)?
   var onDismissReview: (() -> Void)?
+  var onSuspendCard: (() -> Void)?
 
   let isCondensedMode: Bool
 
@@ -67,6 +68,7 @@ final class SRSCardReviewView: UIView {
   private let backLoopButton = UIButton(type: .system)
   private let backFailButton = UIButton(type: .system)
   private let backPassButton = UIButton(type: .system)
+  private let backSuspendButton = UIButton(type: .system)
 
   // MARK: - LLM Result
 
@@ -86,6 +88,7 @@ final class SRSCardReviewView: UIView {
   private let settingsLoopButton = UIButton(type: .system)
   private let settingsToggleButton = UIButton(type: .system)
   private let settingsDismissButton = UIButton(type: .system)
+  private let settingsSuspendButton = UIButton(type: .system)
   private let settingsHideButton = UIButton(type: .system)
   private let buttonHeightSlider = UISlider()
   private let buttonHeightValueLabel = UILabel()
@@ -455,6 +458,16 @@ final class SRSCardReviewView: UIView {
     backFailButton.addTarget(self, action: #selector(handleFailTap), for: .touchUpInside)
     Self.styleAction(backPassButton, title: "Pass", hotkey: "2", backgroundColor: .systemGreen)
     backPassButton.addTarget(self, action: #selector(handlePassTap), for: .touchUpInside)
+
+    var suspendConfig = UIButton.Configuration.tinted()
+    suspendConfig.title = "Suspend"
+    suspendConfig.baseBackgroundColor = .systemOrange
+    suspendConfig.baseForegroundColor = .systemOrange
+    suspendConfig.cornerStyle = .medium
+    suspendConfig.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14)
+    backSuspendButton.configuration = suspendConfig
+    backSuspendButton.translatesAutoresizingMaskIntoConstraints = false
+    backSuspendButton.addTarget(self, action: #selector(handleSuspendTap), for: .touchUpInside)
   }
 
   private func setUpLLMResult() {
@@ -575,7 +588,7 @@ final class SRSCardReviewView: UIView {
     frontContainer.addSubview(frontBottomRow)
     frontContainer.addSubview(frontAnswerRow)
 
-    let backTopRow = UIStackView(arrangedSubviews: [backLoopButton])
+    let backTopRow = UIStackView(arrangedSubviews: [backLoopButton, backSuspendButton])
     backTopRow.axis = .horizontal
     backTopRow.spacing = 16
     backTopRow.translatesAutoresizingMaskIntoConstraints = false
@@ -710,6 +723,9 @@ final class SRSCardReviewView: UIView {
     Self.styleAction(settingsToggleButton, title: "Toggle Thumbnail", hotkey: "T", backgroundColor: .systemGray)
     settingsToggleButton.addTarget(self, action: #selector(handleToggleTap), for: .touchUpInside)
 
+    Self.styleAction(settingsSuspendButton, title: "Suspend Card", hotkey: "", backgroundColor: .systemOrange)
+    settingsSuspendButton.addTarget(self, action: #selector(handleSuspendTap), for: .touchUpInside)
+
     Self.styleAction(settingsDismissButton, title: "Dismiss Review", hotkey: "", backgroundColor: .systemRed.withAlphaComponent(0.8))
     settingsDismissButton.addTarget(self, action: #selector(handleDismissReview), for: .touchUpInside)
 
@@ -745,6 +761,7 @@ final class SRSCardReviewView: UIView {
       settingsToggleButton,
       heightHeaderRow,
       buttonHeightSlider,
+      settingsSuspendButton,
       settingsDismissButton,
       settingsHideButton,
     ])
@@ -1041,7 +1058,7 @@ final class SRSCardReviewView: UIView {
     isShowingBack = true
     frontContainer.isHidden = true
     backContainer.isHidden = false
-    playFromStart()
+    applyVideoStageVisibility()
   }
 
   func replay() {
@@ -1368,8 +1385,13 @@ final class SRSCardReviewView: UIView {
 
   // MARK: - Actions
 
-  @objc private func handleVideoTap() {
-    togglePlayPause()
+  @objc private func handleVideoTap(_ gesture: UITapGestureRecognizer) {
+    let location = gesture.location(in: videoStageView)
+    if location.x < videoStageView.bounds.width / 3.0 {
+      playFromStart()
+    } else {
+      togglePlayPause()
+    }
   }
 
   @objc private func handleToggleTap() {
@@ -1424,6 +1446,10 @@ final class SRSCardReviewView: UIView {
     let willShow = settingsPanel.isHidden
     settingsPanel.isHidden = !willShow
     settingsDimView.isHidden = !willShow
+  }
+
+  @objc private func handleSuspendTap() {
+    onSuspendCard?()
   }
 
   @objc private func handleDismissReview() {

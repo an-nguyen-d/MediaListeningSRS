@@ -356,6 +356,12 @@ extension MediaListeningSRSDatabaseClient {
       }
     }
 
+    migrator.registerMigration("13") { db in
+      try db.alter(table: "srsCardRecord") { t in
+        t.add(column: "isSuspended", .boolean).notNull().defaults(to: false)
+      }
+    }
+
     return migrator
   }
 }

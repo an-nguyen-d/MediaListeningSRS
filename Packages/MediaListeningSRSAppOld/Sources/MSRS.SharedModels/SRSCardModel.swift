@@ -43,6 +43,7 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
   public var frontVideoVisibility: FrontVideoVisibility
   public var playbackSpeed: Double
   public var consecutiveCorrectAtCurrentSpeed: Int
+  public var isSuspended: Bool
 
   public init(
     id: ID,
@@ -59,7 +60,8 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     cachedLabelRanges: [SRSCardLabelRange] = [],
     frontVideoVisibility: FrontVideoVisibility = .blackScreen,
     playbackSpeed: Double = 1.0,
-    consecutiveCorrectAtCurrentSpeed: Int = 0
+    consecutiveCorrectAtCurrentSpeed: Int = 0,
+    isSuspended: Bool = false
   ) {
     self.id = id
     self.createdAt = createdAt
@@ -76,5 +78,6 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     self.frontVideoVisibility = frontVideoVisibility
     self.playbackSpeed = playbackSpeed
     self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed
+    self.isSuspended = isSuspended
   }
 }

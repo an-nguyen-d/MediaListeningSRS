@@ -48,6 +48,9 @@ public struct SRSCardRecord: Codable, FetchableRecord, MutablePersistableRecord,
   public var lastReviewDate: Date?
   public var dueDate: Date?
 
+  // MARK: - Suspension
+  public var isSuspended: Bool = false
+
   public mutating func didInsert(_ inserted: InsertionSuccess) {
     id = inserted.rowID
   }

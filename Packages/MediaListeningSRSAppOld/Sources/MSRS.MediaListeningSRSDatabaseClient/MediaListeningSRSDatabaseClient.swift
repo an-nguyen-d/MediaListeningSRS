@@ -438,6 +438,18 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
 
     public var countDueCards: @Sendable (CountDueCards.Request) async throws -> CountDueCards.Response
 
+    public enum SuspendCard {
+      public struct Request: Sendable {
+        public let cardID: SRSCardModel.ID
+        public init(cardID: SRSCardModel.ID) { self.cardID = cardID }
+      }
+      public struct Response: Sendable, Equatable {
+        public init() {}
+      }
+    }
+
+    public var suspendCard: @Sendable (SuspendCard.Request) async throws -> SuspendCard.Response
+
     public init(
       create: @Sendable @escaping (Create.Request) async throws -> Create.Response,
       delete: @Sendable @escaping (Delete.Request) async throws -> Delete.Response,
@@ -453,7 +465,8 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       batchUpdateCachedTranscripts: @Sendable @escaping (BatchUpdateCachedTranscripts.Request) async throws -> BatchUpdateCachedTranscripts.Response,
       batchUpdateCachedLabelRanges: @Sendable @escaping (BatchUpdateCachedLabelRanges.Request) async throws -> BatchUpdateCachedLabelRanges.Response,
       fetchAllCards: @Sendable @escaping (FetchAllCards.Request) async throws -> FetchAllCards.Response,
-      countDueCards: @Sendable @escaping (CountDueCards.Request) async throws -> CountDueCards.Response
+      countDueCards: @Sendable @escaping (CountDueCards.Request) async throws -> CountDueCards.Response,
+      suspendCard: @Sendable @escaping (SuspendCard.Request) async throws -> SuspendCard.Response
     ) {
       self.create = create
       self.delete = delete
@@ -470,6 +483,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       self.batchUpdateCachedLabelRanges = batchUpdateCachedLabelRanges
       self.fetchAllCards = fetchAllCards
       self.countDueCards = countDueCards
+      self.suspendCard = suspendCard
     }
   }
   public var srsCard: SRSCard

@@ -28,6 +28,7 @@ public enum SRSCardReviewModels {
     case submitTypedAnswer(String)
     case transcriptTappedAtCharacterIndex(Int)
     case autoLoopVideoChanged(Bool)
+    case suspendCard
   }
 
   public enum Grade: Sendable, Equatable {

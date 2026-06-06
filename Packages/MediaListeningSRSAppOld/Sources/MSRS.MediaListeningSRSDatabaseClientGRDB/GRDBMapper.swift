@@ -90,7 +90,8 @@ internal enum GRDBMapper {
         cachedLabelRanges: SRSCardLabelRange.decodeFromJSON(record.cachedLabelRangesJSON),
         frontVideoVisibility: SRSCardModel.FrontVideoVisibility(rawValue: record.frontVideoVisibilityRawValue) ?? .blackScreen,
         playbackSpeed: record.playbackSpeed,
-        consecutiveCorrectAtCurrentSpeed: record.consecutiveCorrectAtCurrentSpeed
+        consecutiveCorrectAtCurrentSpeed: record.consecutiveCorrectAtCurrentSpeed,
+        isSuspended: record.isSuspended
       )
     }
   }

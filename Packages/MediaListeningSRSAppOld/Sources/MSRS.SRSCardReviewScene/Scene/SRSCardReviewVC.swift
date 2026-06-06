@@ -65,6 +65,9 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     contentView.onDismissReview = { [weak self] in
       self?.dismiss(animated: true)
     }
+    contentView.onSuspendCard = { [weak self] in
+      self?.showSuspendConfirmation()
+    }
     if contentView.isCondensedMode {
       navigationController?.setNavigationBarHidden(true, animated: false)
     } else if navigationController?.presentingViewController != nil {
@@ -96,13 +99,24 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
   public override var canBecomeFirstResponder: Bool { true }
 
   public override var keyCommands: [UIKeyCommand]? {
-    [
+    var commands: [UIKeyCommand] = [
       UIKeyCommand(input: "t", modifierFlags: [], action: #selector(tPressed), discoverabilityTitle: "Toggle Thumbnail"),
       UIKeyCommand(input: " ", modifierFlags: [], action: #selector(spacePressed), discoverabilityTitle: "Play"),
       UIKeyCommand(input: "\r", modifierFlags: [], action: #selector(returnPressed), discoverabilityTitle: "Reveal Back"),
       UIKeyCommand(input: "1", modifierFlags: [], action: #selector(failPressed), discoverabilityTitle: "Fail"),
       UIKeyCommand(input: "2", modifierFlags: [], action: #selector(passPressed), discoverabilityTitle: "Pass"),
     ]
+    if MSRSAppSettings.numpadHotkeysEnabled {
+      commands.append(contentsOf: [
+        UIKeyCommand(input: "7", modifierFlags: [], action: #selector(returnPressed), discoverabilityTitle: "Reveal Back (Numpad)"),
+        UIKeyCommand(input: "8", modifierFlags: [], action: #selector(failPressed), discoverabilityTitle: "Fail (Numpad)"),
+        UIKeyCommand(input: "9", modifierFlags: [], action: #selector(passPressed), discoverabilityTitle: "Pass (Numpad)"),
+        UIKeyCommand(input: "4", modifierFlags: [], action: #selector(speedDownPressed), discoverabilityTitle: "Speed −0.1 (Numpad)"),
+        UIKeyCommand(input: "5", modifierFlags: [], action: #selector(spacePressed), discoverabilityTitle: "Play/Pause (Numpad)"),
+        UIKeyCommand(input: "6", modifierFlags: [], action: #selector(speedUpPressed), discoverabilityTitle: "Speed +0.1 (Numpad)"),
+      ])
+    }
+    return commands
   }
 
   @objc private func tPressed() {
@@ -119,16 +133,18 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
   }
 
   @objc private func failPressed() {
-    guard contentView.isShowingBackSide else { return }
-    ReviewSoundPlayer.play(.failCard)
-    pendingGradeOverlayColor = .systemRed
+    if MSRSAppSettings.reviewFeedbackEffectsEnabled {
+      ReviewSoundPlayer.play(.failCard)
+      pendingGradeOverlayColor = .systemRed
+    }
     interactor.sendAction(.gradedAndNext(.fail))
   }
 
   @objc private func passPressed() {
-    guard contentView.isShowingBackSide else { return }
-    ReviewSoundPlayer.play(.passCard)
-    pendingGradeOverlayColor = .systemGreen
+    if MSRSAppSettings.reviewFeedbackEffectsEnabled {
+      ReviewSoundPlayer.play(.passCard)
+      pendingGradeOverlayColor = .systemGreen
+    }
     interactor.sendAction(.gradedAndNext(.pass))
   }
 
@@ -140,6 +156,19 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     contentView.handleSpeedDelta(0.1)
   }
 
+  private func showSuspendConfirmation() {
+    let alert = UIAlertController(
+      title: "Suspend Card",
+      message: "This card will be removed from review. Are you sure?",
+      preferredStyle: .alert
+    )
+    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+    alert.addAction(UIAlertAction(title: "Suspend", style: .destructive) { [weak self] _ in
+      self?.interactor.sendAction(.suspendCard)
+    })
+    present(alert, animated: true)
+  }
+
   @objc private func doneTapped() {
     dismiss(animated: true)
   }
@@ -149,9 +178,12 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
   func displayCard(_ viewModel: SRSCardReviewModels.CardViewModel) {
     let overlayColor = pendingGradeOverlayColor
     pendingGradeOverlayColor = nil
-    ReviewSoundPlayer.play(.showCard)
+    let effectsEnabled = MSRSAppSettings.reviewFeedbackEffectsEnabled
+    if effectsEnabled {
+      ReviewSoundPlayer.play(.showCard)
+    }
     contentView.setCard(viewModel)
-    if let overlayColor {
+    if effectsEnabled, let overlayColor {
       showGradeOverlay(color: overlayColor)
     }
   }
