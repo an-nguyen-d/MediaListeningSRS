@@ -1,5 +1,8 @@
 import UIKit
+import JML_JMLDatabaseClient
 import MSRS_AppDependencies
+import MSRS_ClipExportService
+import MSRS_ClipStorageClient
 import MSRS_MediaSourceImportService
 import MSRS_MediaSourcesListScene
 import MSRS_Shared
@@ -178,6 +181,7 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
     backfillTranscriptCacheIfNeeded()
     backfillClipUploadsIfNeeded()
     backfillLabelRangesIfNeeded()
+    repairOrphanedClipsIfNeeded()
   }
 
   // MARK: - Sync
@@ -616,6 +620,20 @@ open class AppSceneDelegate: UIResponder, UIWindowSceneDelegate {
       } catch {
         print("[AppSettings] UserDefaults migration failed: \(error)")
       }
+    }
+    #endif
+  }
+
+  private func repairOrphanedClipsIfNeeded() {
+    #if targetEnvironment(macCatalyst)
+    Task {
+      await OrphanedClipRepairService.repairIfNeeded(
+        mediaListeningSRSDatabaseClient: dependencies.mediaListeningSRSDatabaseClient,
+        jmlDatabaseClient: dependencies.jmlDatabaseClient,
+        clipExportService: dependencies.clipExportService,
+        clipStorageClient: dependencies.clipStorageClient,
+        exportedClipsDirectoryURL: dependencies.exportedClipsDirectoryURL
+      )
     }
     #endif
   }

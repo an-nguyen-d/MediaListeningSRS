@@ -73,6 +73,9 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     contentView.onShowCardHistory = { [weak self] in
       self?.interactor.sendAction(.showCardHistory)
     }
+    contentView.onEditTranscript = { [weak self] in
+      self?.interactor.sendAction(.editTranscript)
+    }
     if contentView.isCondensedMode {
       navigationController?.setNavigationBarHidden(true, animated: false)
     } else if navigationController?.presentingViewController != nil {
@@ -230,9 +233,20 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
       viewModel: result.viewModel,
       tappedWordFrame: tappedWordFrame,
       isAlreadyFullyKnown: result.isAlreadyFullyKnown,
+      showCreateReadingCardButton: result.showCreateReadingCardButton,
       onMarkAsFullyKnownTapped: { [weak self] in
         self?.interactor.sendAction(.markTermAsFullyKnown(result.japaneseTermID))
       },
+      onCreateReadingCardTapped: result.showCreateReadingCardButton ? { [weak self] in
+        guard let sourceCardID = result.sourceCardID,
+              let range = result.tappedRange else { return }
+        self?.interactor.sendAction(.createReadingCard(
+          sourceCardID: sourceCardID,
+          termID: result.japaneseTermID,
+          utf16Location: range.location,
+          utf16Length: range.length
+        ))
+      } : nil,
       onDismiss: { [weak self] in
         self?.contentView.setSelectedTermID(nil)
         self?.richDictionaryPopup = nil
@@ -275,5 +289,38 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     let nav = UINavigationController(rootViewController: historyVC)
     nav.modalPresentationStyle = .fullScreen
     present(nav, animated: true)
+  }
+
+  func displayEditTranscript(currentText: String) {
+    let editor = TranscriptEditorVC(currentText: currentText) { [weak self] newText in
+      self?.interactor.sendAction(.updateTranscript(newText))
+    }
+    editor.modalPresentationStyle = .fullScreen
+    present(editor, animated: true)
+  }
+
+  func displayReadingCardCreated() {
+    let toast = UILabel()
+    toast.text = "  Reading card created  "
+    toast.textColor = .white
+    toast.backgroundColor = .systemGreen
+    toast.textAlignment = .center
+    toast.font = .systemFont(ofSize: 15, weight: .semibold)
+    toast.layer.cornerRadius = 8
+    toast.clipsToBounds = true
+    toast.alpha = 0
+    toast.translatesAutoresizingMaskIntoConstraints = false
+    view.addSubview(toast)
+    NSLayoutConstraint.activate([
+      toast.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+      toast.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+      toast.heightAnchor.constraint(equalToConstant: 36),
+    ])
+    UIView.animate(withDuration: 0.25) { toast.alpha = 1 }
+    UIView.animate(withDuration: 0.3, delay: 1.5, options: .curveEaseOut) {
+      toast.alpha = 0
+    } completion: { _ in
+      toast.removeFromSuperview()
+    }
   }
 }

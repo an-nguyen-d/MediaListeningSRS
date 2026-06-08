@@ -254,13 +254,37 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       public typealias Response = AsyncThrowingStream<[SRSCardModel], Error>
     }
 
+    public enum CreateReadingCard {
+      public struct Request: Sendable {
+        public let sourceCardID: SRSCardModel.ID
+        public let targetTermID: Int64
+        public let targetTermUTF16Location: Int
+        public let targetTermUTF16Length: Int
+        public init(
+          sourceCardID: SRSCardModel.ID,
+          targetTermID: Int64,
+          targetTermUTF16Location: Int,
+          targetTermUTF16Length: Int
+        ) {
+          self.sourceCardID = sourceCardID
+          self.targetTermID = targetTermID
+          self.targetTermUTF16Location = targetTermUTF16Location
+          self.targetTermUTF16Length = targetTermUTF16Length
+        }
+      }
+      public struct Response: Sendable, Equatable {
+        public let model: SRSCardModel
+        public init(model: SRSCardModel) { self.model = model }
+      }
+    }
+
     public enum RecordReview {
       public struct Request: Sendable {
         public let cardID: SRSCardModel.ID
         /// FSRS rating raw value (1=again, 2=hard, 3=good, 4=easy). Manual=0 is not allowed.
         public let ratingRawValue: Int
-        public let listenCount: Int
-        public init(cardID: SRSCardModel.ID, ratingRawValue: Int, listenCount: Int) {
+        public let listenCount: Int?
+        public init(cardID: SRSCardModel.ID, ratingRawValue: Int, listenCount: Int?) {
           self.cardID = cardID
           self.ratingRawValue = ratingRawValue
           self.listenCount = listenCount
@@ -334,6 +358,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
     }
 
     public var create: @Sendable (Create.Request) async throws -> Create.Response
+    public var createReadingCard: @Sendable (CreateReadingCard.Request) async throws -> CreateReadingCard.Response
     public var delete: @Sendable (Delete.Request) async throws -> Delete.Response
     public var observeForSource: @Sendable (ObserveForSource.Request) async throws -> ObserveForSource.Response
     public var observeAll: @Sendable (ObserveAll.Request) async throws -> ObserveAll.Response
@@ -427,6 +452,16 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
 
     public var fetchAllCards: @Sendable (FetchAllCards.Request) async throws -> FetchAllCards.Response
 
+    public enum FetchCardsWithEmptyClipPath {
+      public struct Request: Sendable { public init() {} }
+      public struct Response: Sendable, Equatable {
+        public let cards: [SRSCardModel]
+        public init(cards: [SRSCardModel]) { self.cards = cards }
+      }
+    }
+
+    public var fetchCardsWithEmptyClipPath: @Sendable (FetchCardsWithEmptyClipPath.Request) async throws -> FetchCardsWithEmptyClipPath.Response
+
     public enum CountDueCards {
       public struct Request: Sendable {
         public let asOf: Date
@@ -439,6 +474,41 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
     }
 
     public var countDueCards: @Sendable (CountDueCards.Request) async throws -> CountDueCards.Response
+
+    public enum FetchCardStateCounts {
+      public struct Request: Sendable {
+        public let asOf: Date
+        public init(asOf: Date) { self.asOf = asOf }
+      }
+      public struct Response: Sendable, Equatable {
+        public let totalCards: Int
+        public let newCount: Int
+        public let learningCount: Int
+        public let reviewCount: Int
+        public let relearningCount: Int
+        public let suspendedCount: Int
+        public let dueNowCount: Int
+        public init(
+          totalCards: Int,
+          newCount: Int,
+          learningCount: Int,
+          reviewCount: Int,
+          relearningCount: Int,
+          suspendedCount: Int,
+          dueNowCount: Int
+        ) {
+          self.totalCards = totalCards
+          self.newCount = newCount
+          self.learningCount = learningCount
+          self.reviewCount = reviewCount
+          self.relearningCount = relearningCount
+          self.suspendedCount = suspendedCount
+          self.dueNowCount = dueNowCount
+        }
+      }
+    }
+
+    public var fetchCardStateCounts: @Sendable (FetchCardStateCounts.Request) async throws -> FetchCardStateCounts.Response
 
     public enum SuspendCard {
       public struct Request: Sendable {
@@ -502,6 +572,7 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
 
     public init(
       create: @Sendable @escaping (Create.Request) async throws -> Create.Response,
+      createReadingCard: @Sendable @escaping (CreateReadingCard.Request) async throws -> CreateReadingCard.Response,
       delete: @Sendable @escaping (Delete.Request) async throws -> Delete.Response,
       observeForSource: @Sendable @escaping (ObserveForSource.Request) async throws -> ObserveForSource.Response,
       observeAll: @Sendable @escaping (ObserveAll.Request) async throws -> ObserveAll.Response,
@@ -515,12 +586,15 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       batchUpdateCachedTranscripts: @Sendable @escaping (BatchUpdateCachedTranscripts.Request) async throws -> BatchUpdateCachedTranscripts.Response,
       batchUpdateCachedLabelRanges: @Sendable @escaping (BatchUpdateCachedLabelRanges.Request) async throws -> BatchUpdateCachedLabelRanges.Response,
       fetchAllCards: @Sendable @escaping (FetchAllCards.Request) async throws -> FetchAllCards.Response,
+      fetchCardsWithEmptyClipPath: @Sendable @escaping (FetchCardsWithEmptyClipPath.Request) async throws -> FetchCardsWithEmptyClipPath.Response,
       countDueCards: @Sendable @escaping (CountDueCards.Request) async throws -> CountDueCards.Response,
+      fetchCardStateCounts: @Sendable @escaping (FetchCardStateCounts.Request) async throws -> FetchCardStateCounts.Response,
       suspendCard: @Sendable @escaping (SuspendCard.Request) async throws -> SuspendCard.Response,
       fetchRecentReviewEvents: @Sendable @escaping (FetchRecentReviewEvents.Request) async throws -> FetchRecentReviewEvents.Response,
       fetchReviewEventsForCard: @Sendable @escaping (FetchReviewEventsForCard.Request) async throws -> FetchReviewEventsForCard.Response
     ) {
       self.create = create
+      self.createReadingCard = createReadingCard
       self.delete = delete
       self.observeForSource = observeForSource
       self.observeAll = observeAll
@@ -534,7 +608,9 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       self.batchUpdateCachedTranscripts = batchUpdateCachedTranscripts
       self.batchUpdateCachedLabelRanges = batchUpdateCachedLabelRanges
       self.fetchAllCards = fetchAllCards
+      self.fetchCardsWithEmptyClipPath = fetchCardsWithEmptyClipPath
       self.countDueCards = countDueCards
+      self.fetchCardStateCounts = fetchCardStateCounts
       self.suspendCard = suspendCard
       self.fetchRecentReviewEvents = fetchRecentReviewEvents
       self.fetchReviewEventsForCard = fetchReviewEventsForCard

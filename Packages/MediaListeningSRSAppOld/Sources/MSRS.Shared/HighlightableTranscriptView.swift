@@ -46,6 +46,13 @@ public final class HighlightableTranscriptView: UITextView {
     }
   }
 
+  public var targetWordRange: NSRange? {
+    didSet {
+      if oldValue != targetWordRange { redrawHighlightOverlays() }
+    }
+  }
+  public var targetWordHighlightColor: UIColor = .systemPurple
+
   private var currentText: String = ""
   private var currentLabeledRanges: [HighlightableTranscriptLabeledRange] = []
   private var highlightLayers: [CAShapeLayer] = []
@@ -186,6 +193,7 @@ public final class HighlightableTranscriptView: UITextView {
 
       let glyphRange = installedLayoutManager.glyphRange(forCharacterRange: safeRange, actualCharacterRange: nil)
       let isSelected = (selectedTermID == labeled.termID)
+      let isTarget = targetWordRange.map { NSEqualRanges($0, labeled.range) } ?? false
 
       installedLayoutManager.enumerateEnclosingRects(
         forGlyphRange: glyphRange,
@@ -196,10 +204,23 @@ public final class HighlightableTranscriptView: UITextView {
         let adjustedRect = rect
           .offsetBy(dx: self.textContainerInset.left, dy: self.textContainerInset.top)
 
+        if isTarget {
+          let bgLayer = CAShapeLayer()
+          let bgRect = adjustedRect.insetBy(dx: -2, dy: -1)
+          bgLayer.path = UIBezierPath(roundedRect: bgRect, cornerRadius: 3).cgPath
+          bgLayer.fillColor = self.targetWordHighlightColor.withAlphaComponent(0.2).cgColor
+          bgLayer.strokeColor = nil
+          self.layer.insertSublayer(bgLayer, at: 0)
+          self.highlightLayers.append(bgLayer)
+        }
+
         let color: UIColor
         let thickness: CGFloat
         if isSelected {
           color = self.selectedHighlightColor
+          thickness = self.underlineThickness + 1
+        } else if isTarget {
+          color = self.targetWordHighlightColor
           thickness = self.underlineThickness + 1
         } else if labeled.isFullyKnown {
           color = self.knownHighlightColor

@@ -368,6 +368,15 @@ extension MediaListeningSRSDatabaseClient {
       }
     }
 
+    migrator.registerMigration("15") { db in
+      try db.alter(table: "srsCardRecord") { t in
+        t.add(column: "targetTermID", .integer)
+        t.add(column: "targetTermUTF16Location", .integer)
+        t.add(column: "targetTermUTF16Length", .integer)
+        t.add(column: "cachedTargetTermReadingJSON", .text)
+      }
+    }
+
     return migrator
   }
 }

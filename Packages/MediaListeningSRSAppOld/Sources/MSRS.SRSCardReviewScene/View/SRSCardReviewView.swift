@@ -17,6 +17,7 @@ final class SRSCardReviewView: UIView {
   var onDismissReview: (() -> Void)?
   var onSuspendCard: (() -> Void)?
   var onShowCardHistory: (() -> Void)?
+  var onEditTranscript: (() -> Void)?
 
   let isCondensedMode: Bool
 
@@ -67,11 +68,13 @@ final class SRSCardReviewView: UIView {
   private let backInflectionAnnotationsLabel = UILabel()
   private let backTranslationLabel = UILabel()
   private let backListenCountLabel = UILabel()
+  private let backTargetWordAnnotationLabel = UILabel()
   private let backLoopButton = UIButton(type: .system)
   private let backFailButton = UIButton(type: .system)
   private let backPassButton = UIButton(type: .system)
   private let backSuspendButton = UIButton(type: .system)
   private let backHistoryButton = UIButton(type: .system)
+  private let backEditTranscriptButton = UIButton(type: .system)
 
   // MARK: - LLM Result
 
@@ -93,6 +96,7 @@ final class SRSCardReviewView: UIView {
   private let settingsDismissButton = UIButton(type: .system)
   private let settingsSuspendButton = UIButton(type: .system)
   private let settingsHistoryButton = UIButton(type: .system)
+  private let settingsEditTranscriptButton = UIButton(type: .system)
   private let settingsHideButton = UIButton(type: .system)
   private let buttonHeightSlider = UISlider()
   private let buttonHeightValueLabel = UILabel()
@@ -113,6 +117,7 @@ final class SRSCardReviewView: UIView {
 
   // MARK: - State
 
+  private var currentCardType: SRSCardModel.CardType = .listening
   private var frontVideoVisibility: SRSCardModel.FrontVideoVisibility = .blackScreen
   private var isShowingBack = false
   private var isFrontTranscriptRevealed = false
@@ -457,6 +462,12 @@ final class SRSCardReviewView: UIView {
     backInflectionAnnotationsLabel.isHidden = true
     backInflectionAnnotationsLabel.translatesAutoresizingMaskIntoConstraints = false
 
+    backTargetWordAnnotationLabel.font = .systemFont(ofSize: 38, weight: .medium)
+    backTargetWordAnnotationLabel.textColor = isCondensedMode ? .systemPurple : .systemPurple
+    backTargetWordAnnotationLabel.numberOfLines = 0
+    backTargetWordAnnotationLabel.isHidden = true
+    backTargetWordAnnotationLabel.translatesAutoresizingMaskIntoConstraints = false
+
     backTranslationLabel.font = .systemFont(ofSize: MSRSAppSettings.reviewTranslationFontSize, weight: .regular)
     backTranslationLabel.textColor = isCondensedMode ? .white.withAlphaComponent(0.8) : .secondaryLabel
     backTranslationLabel.numberOfLines = 0
@@ -488,6 +499,16 @@ final class SRSCardReviewView: UIView {
     backHistoryButton.configuration = historyConfig
     backHistoryButton.translatesAutoresizingMaskIntoConstraints = false
     backHistoryButton.addTarget(self, action: #selector(handleHistoryTap), for: .touchUpInside)
+
+    var editConfig = UIButton.Configuration.tinted()
+    editConfig.image = UIImage(systemName: "pencil")
+    editConfig.baseBackgroundColor = .systemGray
+    editConfig.baseForegroundColor = .systemGray
+    editConfig.cornerStyle = .medium
+    editConfig.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14)
+    backEditTranscriptButton.configuration = editConfig
+    backEditTranscriptButton.translatesAutoresizingMaskIntoConstraints = false
+    backEditTranscriptButton.addTarget(self, action: #selector(handleEditTranscriptTap), for: .touchUpInside)
   }
 
   private func setUpLLMResult() {
@@ -608,7 +629,7 @@ final class SRSCardReviewView: UIView {
     frontContainer.addSubview(frontBottomRow)
     frontContainer.addSubview(frontAnswerRow)
 
-    let backTopRow = UIStackView(arrangedSubviews: [backLoopButton, backHistoryButton, backSuspendButton])
+    let backTopRow = UIStackView(arrangedSubviews: [backLoopButton, backHistoryButton, backEditTranscriptButton, backSuspendButton])
     backTopRow.axis = .horizontal
     backTopRow.spacing = 16
     backTopRow.translatesAutoresizingMaskIntoConstraints = false
@@ -625,6 +646,7 @@ final class SRSCardReviewView: UIView {
     backContainer.addSubview(backListenCountLabel)
     backContainer.addSubview(backTranscriptView)
     backContainer.addSubview(backInflectionAnnotationsLabel)
+    backContainer.addSubview(backTargetWordAnnotationLabel)
     backContainer.addSubview(backTranslationLabel)
     backContainer.addSubview(llmResultContainer)
     backContainer.addSubview(backGradeRow)
@@ -689,7 +711,11 @@ final class SRSCardReviewView: UIView {
       backInflectionAnnotationsLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backInflectionAnnotationsLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
-      backTranslationLabel.topAnchor.constraint(equalTo: backInflectionAnnotationsLabel.bottomAnchor, constant: 12),
+      backTargetWordAnnotationLabel.topAnchor.constraint(equalTo: backInflectionAnnotationsLabel.bottomAnchor, constant: 6),
+      backTargetWordAnnotationLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      backTargetWordAnnotationLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      backTranslationLabel.topAnchor.constraint(equalTo: backTargetWordAnnotationLabel.bottomAnchor, constant: 12),
       backTranslationLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backTranslationLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
@@ -753,6 +779,9 @@ final class SRSCardReviewView: UIView {
     Self.styleAction(settingsHistoryButton, title: "Card History", hotkey: "", backgroundColor: .systemBlue)
     settingsHistoryButton.addTarget(self, action: #selector(handleHistoryTap), for: .touchUpInside)
 
+    Self.styleAction(settingsEditTranscriptButton, title: "Edit Transcript", hotkey: "", backgroundColor: .systemGray)
+    settingsEditTranscriptButton.addTarget(self, action: #selector(handleEditTranscriptTap), for: .touchUpInside)
+
     Self.styleAction(settingsDismissButton, title: "Dismiss Review", hotkey: "", backgroundColor: .systemRed.withAlphaComponent(0.8))
     settingsDismissButton.addTarget(self, action: #selector(handleDismissReview), for: .touchUpInside)
 
@@ -790,6 +819,7 @@ final class SRSCardReviewView: UIView {
       buttonHeightSlider,
       settingsSuspendButton,
       settingsHistoryButton,
+      settingsEditTranscriptButton,
       settingsDismissButton,
       settingsHideButton,
     ])
@@ -832,6 +862,7 @@ final class SRSCardReviewView: UIView {
     backContainer.addSubview(backListenCountLabel)
     backContainer.addSubview(backTranscriptView)
     backContainer.addSubview(backInflectionAnnotationsLabel)
+    backContainer.addSubview(backTargetWordAnnotationLabel)
     backContainer.addSubview(backTranslationLabel)
     backContainer.addSubview(llmResultContainer)
     backContainer.addSubview(backGradeRow)
@@ -901,7 +932,11 @@ final class SRSCardReviewView: UIView {
       backInflectionAnnotationsLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backInflectionAnnotationsLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
-      backTranslationLabel.topAnchor.constraint(equalTo: backInflectionAnnotationsLabel.bottomAnchor, constant: 8),
+      backTargetWordAnnotationLabel.topAnchor.constraint(equalTo: backInflectionAnnotationsLabel.bottomAnchor, constant: 6),
+      backTargetWordAnnotationLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
+      backTargetWordAnnotationLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
+
+      backTranslationLabel.topAnchor.constraint(equalTo: backTargetWordAnnotationLabel.bottomAnchor, constant: 8),
       backTranslationLabel.leadingAnchor.constraint(equalTo: backContainer.leadingAnchor),
       backTranslationLabel.trailingAnchor.constraint(equalTo: backContainer.trailingAnchor),
 
@@ -993,7 +1028,11 @@ final class SRSCardReviewView: UIView {
 
   func setCard(_ viewModel: SRSCardReviewModels.CardViewModel) {
     emptyLabel.isHidden = true
+    currentCardType = viewModel.cardType
     positionLabel.text = viewModel.cardPositionLabel
+
+    let isReading = viewModel.cardType == .reading
+
     videoStageView.isHidden = false
     if isCondensedMode {
       gradientView.isHidden = false
@@ -1007,7 +1046,45 @@ final class SRSCardReviewView: UIView {
     backInflectionAnnotationsLabel.text = viewModel.inflectionAnnotationsText
     backInflectionAnnotationsLabel.isHidden = viewModel.inflectionAnnotationsText == nil
     backTranslationLabel.text = viewModel.englishTranslationText ?? "(no translation)"
-    frontTranscriptLabel.text = viewModel.transcriptText
+
+    if isReading, let target = viewModel.readingCardTargetWord {
+      backTranscriptView.targetWordRange = NSRange(
+        location: target.utf16Location, length: target.utf16Length
+      )
+      let nsText = viewModel.transcriptText as NSString
+      let safeRange = NSRange(
+        location: max(0, target.utf16Location),
+        length: min(target.utf16Length, nsText.length - max(0, target.utf16Location))
+      )
+      let surfaceText = safeRange.length > 0 ? nsText.substring(with: safeRange) : ""
+      let kana = viewModel.readingCardKana ?? ""
+      let definition = viewModel.readingCardDefinition ?? ""
+      let showKana = !kana.isEmpty && kana != surfaceText
+      let headingText = showKana ? "\(surfaceText) (\(kana))" : surfaceText
+      backTargetWordAnnotationLabel.text = "\(headingText) — \(definition)"
+      backTargetWordAnnotationLabel.isHidden = false
+
+      let attributed = NSMutableAttributedString(
+        string: viewModel.transcriptText,
+        attributes: [
+          .font: UIFont.systemFont(ofSize: MSRSAppSettings.reviewTranscriptFontSize, weight: .regular),
+          .foregroundColor: isCondensedMode ? UIColor.white : UIColor.label,
+        ]
+      )
+      if safeRange.length > 0 {
+        attributed.addAttribute(
+          .backgroundColor,
+          value: UIColor.systemPurple.withAlphaComponent(0.2),
+          range: safeRange
+        )
+      }
+      frontTranscriptLabel.attributedText = attributed
+    } else {
+      backTranscriptView.targetWordRange = nil
+      backTargetWordAnnotationLabel.isHidden = true
+      frontTranscriptLabel.attributedText = nil
+      frontTranscriptLabel.text = viewModel.transcriptText
+    }
 
     stopPlayback()
     clipProgressBar.reset()
@@ -1033,10 +1110,10 @@ final class SRSCardReviewView: UIView {
       }
     }
 
-    frontVideoVisibility = viewModel.frontVideoVisibility
+    frontVideoVisibility = isReading ? .blackScreen : viewModel.frontVideoVisibility
     playbackSpeed = viewModel.playbackSpeed
     isShowingBack = false
-    isFrontTranscriptRevealed = false
+    isFrontTranscriptRevealed = isReading
     isVideoPlaying = false
     playerView.isHidden = true
     updateSpeedLabels()
@@ -1066,24 +1143,54 @@ final class SRSCardReviewView: UIView {
     wasAutoFlipped = false
     backAudioHasPlayedThrough = false
     listenCount = 1
-    updateListenCountLabel()
+    hasCompletedFirstPlay = false
+    updateListenCountLabel(isReading: isReading)
     stopAutoFlipTimer()
     autoFlipCancelled = false
     audioHasPlayedThrough = false
     applyAutoFlipButtonState()
 
-    frontTranscriptRevealContainer.isHidden = !MSRSAppSettings.showFrontTranscript
-    applyVideoStageVisibility()
-    updateFrontTranscriptRevealView()
-    showFront()
-    if frontVideoVisibility != .blackScreen {
-      loadOrGenerateThumbnail(
-        thumbnailFileURL: viewModel.thumbnailFileURL,
-        videoFileURL: viewModel.videoFileURL,
-        atTime: viewModel.clipStartTimeSeconds
-      )
+    if isReading {
+      frontSpeedRow.isHidden = true
+      frontTranscriptRevealContainer.isHidden = false
+      frontTranscriptLabel.isHidden = false
+      frontTranscriptRevealHint.isHidden = true
+      frontTypeAnswerButton.isHidden = true
+      frontToggleButton.isHidden = true
+      frontLoopButton.isHidden = true
+      clipProgressBar.isHidden = true
+      backSpeedRow.isHidden = true
+      backStreakLabel.isHidden = true
+      backListenCountLabel.text = "Reading Card"
+    } else {
+      frontSpeedRow.isHidden = false
+      frontTypeAnswerButton.isHidden = false
+      frontToggleButton.isHidden = false
+      frontLoopButton.isHidden = false
+      clipProgressBar.isHidden = false
+      backSpeedRow.isHidden = false
+      backStreakLabel.isHidden = false
+      frontTranscriptRevealContainer.isHidden = !MSRSAppSettings.showFrontTranscript
+      updateFrontTranscriptRevealView()
     }
-    playFromStart()
+
+    applyVideoStageVisibility()
+    if !isReading {
+      updateFrontTranscriptRevealView()
+    }
+    showFront()
+    if isReading {
+      // No audio playback on front for reading cards
+    } else {
+      if frontVideoVisibility != .blackScreen {
+        loadOrGenerateThumbnail(
+          thumbnailFileURL: viewModel.thumbnailFileURL,
+          videoFileURL: viewModel.videoFileURL,
+          atTime: viewModel.clipStartTimeSeconds
+        )
+      }
+      playFromStart()
+    }
   }
 
   func revealBack() {
@@ -1093,6 +1200,9 @@ final class SRSCardReviewView: UIView {
     frontContainer.isHidden = true
     backContainer.isHidden = false
     applyVideoStageVisibility()
+    if currentCardType == .reading {
+      playFromStart()
+    }
   }
 
   func replay() {
@@ -1181,9 +1291,19 @@ final class SRSCardReviewView: UIView {
       playerView.isHidden = false
       blackMaskView.isHidden = true
       blurContainerView.isHidden = true
+      videoStageView.isHidden = false
       return
     }
 
+    if currentCardType == .reading {
+      videoStageView.isHidden = true
+      playerView.isHidden = true
+      blackMaskView.isHidden = true
+      blurContainerView.isHidden = true
+      return
+    }
+
+    videoStageView.isHidden = false
     playerView.isHidden = true
 
     switch frontVideoVisibility {
@@ -1269,6 +1389,8 @@ final class SRSCardReviewView: UIView {
     }
   }
 
+  private var hasCompletedFirstPlay = false
+
   private func playFromStart() {
     guard let player else { return }
     stopPlayback()
@@ -1278,6 +1400,10 @@ final class SRSCardReviewView: UIView {
     player.seek(to: startCMTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
       Task { @MainActor [weak self] in
         guard let self, self.isVideoPlaying else { return }
+        if self.hasCompletedFirstPlay && self.currentCardType == .listening {
+          self.listenCount += 1
+          self.updateListenCountLabel()
+        }
         player.rate = Float(self.playbackSpeed)
         self.installEndObserver()
       }
@@ -1335,9 +1461,7 @@ final class SRSCardReviewView: UIView {
     player?.pause()
     isVideoPlaying = false
     removeEndObserver()
-
-    listenCount += 1
-    updateListenCountLabel()
+    hasCompletedFirstPlay = true
 
     if !isShowingBack && !audioHasPlayedThrough {
       audioHasPlayedThrough = true
@@ -1349,13 +1473,18 @@ final class SRSCardReviewView: UIView {
       startAutoPassTimerIfNeeded()
     }
 
+    if MSRSAppSettings.videoEndSoundVolume > 0 {
+      ReviewSoundPlayer.play(.videoEnd)
+    }
+
     if MSRSAppSettings.autoLoopVideo {
+      let delay = MSRSAppSettings.loopGapDelay
       let workItem = DispatchWorkItem { [weak self] in
         guard let self else { return }
         self.playFromStart()
       }
       autoLoopWorkItem = workItem
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     } else {
       applyVideoStageVisibility()
       let startCMTime = CMTime(seconds: currentClipStartTime, preferredTimescale: 600)
@@ -1363,8 +1492,13 @@ final class SRSCardReviewView: UIView {
     }
   }
 
-  private func updateListenCountLabel() {
-    backListenCountLabel.text = "Listens: \(listenCount)"
+  private func updateListenCountLabel(isReading: Bool? = nil) {
+    let reading = isReading ?? (currentCardType == .reading)
+    if reading {
+      backListenCountLabel.text = "Reading Card"
+    } else {
+      backListenCountLabel.text = "Listens: \(listenCount)"
+    }
   }
 
   private func removeEndObserver() {
@@ -1499,6 +1633,10 @@ final class SRSCardReviewView: UIView {
 
   @objc private func handleHistoryTap() {
     onShowCardHistory?()
+  }
+
+  @objc private func handleEditTranscriptTap() {
+    onEditTranscript?()
   }
 
   @objc private func handleDismissReview() {

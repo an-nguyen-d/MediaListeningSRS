@@ -75,6 +75,19 @@ internal enum GRDBMapper {
         fatalError("SRSCardRecord missing id after fetch")
       }
 
+      let readingCardTargetWord: SRSCardModel.ReadingCardTargetWord?
+      if let termID = record.targetTermID,
+         let location = record.targetTermUTF16Location,
+         let length = record.targetTermUTF16Length {
+        readingCardTargetWord = .init(
+          termID: termID,
+          utf16Location: location,
+          utf16Length: length
+        )
+      } else {
+        readingCardTargetWord = nil
+      }
+
       return .init(
         id: .init(rawValue: rawID),
         createdAt: record.createdAt,
@@ -91,9 +104,12 @@ internal enum GRDBMapper {
         frontVideoVisibility: SRSCardModel.FrontVideoVisibility(rawValue: record.frontVideoVisibilityRawValue) ?? .blackScreen,
         playbackSpeed: record.playbackSpeed,
         consecutiveCorrectAtCurrentSpeed: record.consecutiveCorrectAtCurrentSpeed,
-        isSuspended: record.isSuspended
+        isSuspended: record.isSuspended,
+        cardType: SRSCardModel.CardType(rawValue: record.cardType) ?? .listening,
+        readingCardTargetWord: readingCardTargetWord
       )
     }
+
   }
 
   // MARK: - StudySession

@@ -30,6 +30,9 @@ public enum SRSCardReviewModels {
     case autoLoopVideoChanged(Bool)
     case suspendCard
     case showCardHistory
+    case editTranscript
+    case updateTranscript(String)
+    case createReadingCard(sourceCardID: SRSCardModel.ID, termID: Int64, utf16Location: Int, utf16Length: Int)
   }
 
   public enum Grade: Sendable, Equatable {
@@ -53,6 +56,10 @@ public enum SRSCardReviewModels {
     public let consecutiveCorrectAtCurrentSpeed: Int
     public let failIntervalSeconds: TimeInterval?
     public let passIntervalSeconds: TimeInterval?
+    public let cardType: SRSCardModel.CardType
+    public let readingCardTargetWord: SRSCardModel.ReadingCardTargetWord?
+    public let readingCardKana: String?
+    public let readingCardDefinition: String?
 
     public init(
       cardID: SRSCardModel.ID,
@@ -69,7 +76,11 @@ public enum SRSCardReviewModels {
       playbackSpeed: Double,
       consecutiveCorrectAtCurrentSpeed: Int,
       failIntervalSeconds: TimeInterval? = nil,
-      passIntervalSeconds: TimeInterval? = nil
+      passIntervalSeconds: TimeInterval? = nil,
+      cardType: SRSCardModel.CardType = .listening,
+      readingCardTargetWord: SRSCardModel.ReadingCardTargetWord? = nil,
+      readingCardKana: String? = nil,
+      readingCardDefinition: String? = nil
     ) {
       self.cardID = cardID
       self.videoFileURL = videoFileURL
@@ -86,6 +97,10 @@ public enum SRSCardReviewModels {
       self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed
       self.failIntervalSeconds = failIntervalSeconds
       self.passIntervalSeconds = passIntervalSeconds
+      self.cardType = cardType
+      self.readingCardTargetWord = readingCardTargetWord
+      self.readingCardKana = readingCardKana
+      self.readingCardDefinition = readingCardDefinition
     }
   }
 
@@ -106,17 +121,23 @@ public enum SRSCardReviewModels {
     public let viewModel: DictionaryLookupViewModel
     public let isAlreadyFullyKnown: Bool
     public let tappedRange: NSRange?
+    public let showCreateReadingCardButton: Bool
+    public let sourceCardID: SRSCardModel.ID?
 
     public init(
       japaneseTermID: Int64,
       viewModel: DictionaryLookupViewModel,
       isAlreadyFullyKnown: Bool,
-      tappedRange: NSRange? = nil
+      tappedRange: NSRange? = nil,
+      showCreateReadingCardButton: Bool = false,
+      sourceCardID: SRSCardModel.ID? = nil
     ) {
       self.japaneseTermID = japaneseTermID
       self.viewModel = viewModel
       self.isAlreadyFullyKnown = isAlreadyFullyKnown
       self.tappedRange = tappedRange
+      self.showCreateReadingCardButton = showCreateReadingCardButton
+      self.sourceCardID = sourceCardID
     }
   }
 }

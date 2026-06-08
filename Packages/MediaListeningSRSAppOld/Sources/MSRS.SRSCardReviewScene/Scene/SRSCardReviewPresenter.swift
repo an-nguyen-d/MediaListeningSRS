@@ -15,6 +15,8 @@ protocol SRSCardReviewDisplayer: AnyObject {
   func displayDeckCompleted()
   func displayError(_ message: String)
   func displayCardHistory(_ events: [MediaListeningSRSDatabaseClient.SRSCard.RecentReviewEvent])
+  func displayReadingCardCreated()
+  func displayEditTranscript(currentText: String)
 }
 
 @MainActor
@@ -68,5 +70,13 @@ final class SRSCardReviewPresenter {
 
   func presentCardHistory(_ events: [MediaListeningSRSDatabaseClient.SRSCard.RecentReviewEvent]) {
     displayer?.displayCardHistory(events)
+  }
+
+  func presentReadingCardCreated() {
+    displayer?.displayReadingCardCreated()
+  }
+
+  func presentEditTranscript(currentText: String) {
+    displayer?.displayEditTranscript(currentText: currentText)
   }
 }

@@ -66,6 +66,12 @@ final class CreateAllProgressView: UIView {
     progressBar.setProgress(fraction, animated: completed > 0)
   }
 
+  func showExportingPhase() {
+    titleLabel.text = "Exporting Clips…"
+    progressBar.setProgress(1.0, animated: true)
+    progressLabel.text = "Cards created, exporting video clips"
+  }
+
   func showCompleted(created: Int, errors: Int, onDismiss: @escaping () -> Void) {
     self.onDismiss = onDismiss
     titleLabel.text = "Complete"

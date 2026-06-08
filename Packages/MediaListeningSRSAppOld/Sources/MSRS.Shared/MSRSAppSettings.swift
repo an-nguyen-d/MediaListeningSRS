@@ -244,6 +244,40 @@ public enum MSRSAppSettings {
     }
   }
 
+  private static let videoEndSoundVolumeKey = "MSRS.videoEndSoundVolume"
+  public static let videoEndSoundVolumeMin: Double = 0
+  public static let videoEndSoundVolumeMax: Double = 1.0
+  public static let videoEndSoundVolumeDefault: Double = 0.2
+
+  public static var videoEndSoundVolume: Double {
+    get {
+      if UserDefaults.standard.object(forKey: videoEndSoundVolumeKey) == nil { return videoEndSoundVolumeDefault }
+      let val = UserDefaults.standard.double(forKey: videoEndSoundVolumeKey)
+      return max(videoEndSoundVolumeMin, min(videoEndSoundVolumeMax, val))
+    }
+    set {
+      let clamped = max(videoEndSoundVolumeMin, min(videoEndSoundVolumeMax, newValue))
+      UserDefaults.standard.set(clamped, forKey: videoEndSoundVolumeKey)
+    }
+  }
+
+  private static let loopGapDelayKey = "MSRS.loopGapDelay"
+  public static let loopGapDelayMin: Double = 0
+  public static let loopGapDelayMax: Double = 2.0
+  public static let loopGapDelayDefault: Double = 0.5
+
+  public static var loopGapDelay: Double {
+    get {
+      if UserDefaults.standard.object(forKey: loopGapDelayKey) == nil { return loopGapDelayDefault }
+      let val = UserDefaults.standard.double(forKey: loopGapDelayKey)
+      return max(loopGapDelayMin, min(loopGapDelayMax, val))
+    }
+    set {
+      let clamped = max(loopGapDelayMin, min(loopGapDelayMax, newValue))
+      UserDefaults.standard.set(clamped, forKey: loopGapDelayKey)
+    }
+  }
+
   public static let candidatePlayDelayDefault: Double = 0
   public static let candidatePlayDelayMin: Double = 0
   public static let candidatePlayDelayMax: Double = 1

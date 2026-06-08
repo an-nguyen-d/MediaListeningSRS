@@ -286,8 +286,11 @@ final class ProcessingQueueInteractor: ProcessingQueueInteractorProtocol {
           await MainActor.run { self?.onCreateAllProgress?(index + 1, total) }
         }
 
+        await MainActor.run { self?.onCreateAllProgress?(-1, total) }
+        await ClipExportManager.shared.waitUntilDrained()
         await MainActor.run { self?.finishCreateAll(created: createdCount, errors: errorCount) }
       } catch {
+        await ClipExportManager.shared.waitUntilDrained()
         await MainActor.run {
           self?.presenter.presentError("Create all failed: \(error.localizedDescription)")
           self?.finishCreateAll(created: 0, errors: 0)

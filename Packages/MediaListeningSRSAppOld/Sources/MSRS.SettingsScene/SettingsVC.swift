@@ -14,6 +14,8 @@ public final class SettingsVC: UIViewController {
     case reviewFontSize
     case numpadHotkeys
     case feedbackEffects
+    case videoEndSound
+    case loopGapDelay
     case autoFlip
     case autoPass
     case clipPrefetch
@@ -44,6 +46,10 @@ public final class SettingsVC: UIViewController {
   private var autoFlipDelayValueLabel: UILabel?
   private var clipPrefetchStepper: UIStepper?
   private var clipPrefetchValueLabel: UILabel?
+  private var videoEndSoundVolumeSlider: UISlider?
+  private var videoEndSoundVolumeValueLabel: UILabel?
+  private var loopGapDelaySlider: UISlider?
+  private var loopGapDelayValueLabel: UILabel?
   private var transcriptFontSizeSlider: UISlider?
   private var transcriptFontSizeValueLabel: UILabel?
   private var transcriptFontPreviewLabel: UILabel?
@@ -167,6 +173,18 @@ public final class SettingsVC: UIViewController {
 
   @objc private func feedbackEffectsToggleChanged(_ sender: UISwitch) {
     MSRSAppSettings.reviewFeedbackEffectsEnabled = sender.isOn
+  }
+
+  @objc private func videoEndSoundVolumeSliderChanged(_ sender: UISlider) {
+    let rounded = (Double(sender.value) * 100).rounded() / 100
+    MSRSAppSettings.videoEndSoundVolume = rounded
+    videoEndSoundVolumeValueLabel?.text = String(format: "%.0f%%", rounded * 100)
+  }
+
+  @objc private func loopGapDelaySliderChanged(_ sender: UISlider) {
+    let rounded = (Double(sender.value) * 10).rounded() / 10
+    MSRSAppSettings.loopGapDelay = rounded
+    loopGapDelayValueLabel?.text = String(format: "%.1fs", rounded)
   }
 
   @objc private func autoFlipToggleChanged(_ sender: UISwitch) {
@@ -301,6 +319,8 @@ extension SettingsVC: UITableViewDataSource {
     case .reviewFontSize: return "SRS Review Font Size"
     case .numpadHotkeys: return "Numpad Hotkeys"
     case .feedbackEffects: return "Review Feedback Effects"
+    case .videoEndSound: return "Video End Sound"
+    case .loopGapDelay: return "Loop Gap Delay"
     case .autoFlip: return "Auto-Flip to Back"
     case .autoPass: return "Auto-Pass"
     case .clipPrefetch: return "Clip Prefetch"
@@ -336,6 +356,10 @@ extension SettingsVC: UITableViewDataSource {
       return "Adds number key shortcuts during SRS review: 7 = show back, 8 = fail, 9 = pass, 4 = speed −0.1, 5 = play/pause, 6 = speed +0.1."
     case .feedbackEffects:
       return "Sound effects and screen flash overlay on grading cards. Applies to both SRS review and candidate processing."
+    case .videoEndSound:
+      return "Plays a sound when video/audio reaches the end during SRS review. Set volume to 0% to disable."
+    case .loopGapDelay:
+      return "Pause between the end of one loop and the start of the next when auto-loop is enabled. Applies to both SRS review and candidate processing."
     case .autoFlip:
       return "When enabled, after the audio plays through once, a countdown begins. When it reaches zero, the card automatically flips to show the back. Any tap while on the front cancels the auto-flip."
     case .autoPass:
@@ -493,6 +517,86 @@ extension SettingsVC: UITableViewDataSource {
       toggle.isOn = MSRSAppSettings.reviewFeedbackEffectsEnabled
       toggle.addTarget(self, action: #selector(feedbackEffectsToggleChanged(_:)), for: .valueChanged)
       cell.accessoryView = toggle
+      return cell
+
+    case .videoEndSound:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = ""
+
+      let label = UILabel()
+      label.text = "Volume"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.required, for: .horizontal)
+
+      let valueLabel = UILabel()
+      let currentVolume = MSRSAppSettings.videoEndSoundVolume
+      valueLabel.text = String(format: "%.0f%%", currentVolume * 100)
+      valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      valueLabel.textAlignment = .right
+      valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+      videoEndSoundVolumeValueLabel = valueLabel
+
+      let slider = UISlider()
+      slider.minimumValue = Float(MSRSAppSettings.videoEndSoundVolumeMin)
+      slider.maximumValue = Float(MSRSAppSettings.videoEndSoundVolumeMax)
+      slider.value = Float(currentVolume)
+      slider.addTarget(self, action: #selector(videoEndSoundVolumeSliderChanged(_:)), for: .valueChanged)
+      videoEndSoundVolumeSlider = slider
+
+      let row = UIStackView(arrangedSubviews: [label, slider, valueLabel])
+      row.axis = .horizontal
+      row.spacing = 12
+      row.alignment = .center
+      row.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(row)
+      NSLayoutConstraint.activate([
+        row.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        row.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        row.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        row.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+        valueLabel.widthAnchor.constraint(equalToConstant: 50),
+      ])
+      return cell
+
+    case .loopGapDelay:
+      let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      cell.textLabel?.text = ""
+
+      let label = UILabel()
+      label.text = "Delay"
+      label.font = .preferredFont(forTextStyle: .body)
+      label.setContentHuggingPriority(.required, for: .horizontal)
+
+      let valueLabel = UILabel()
+      let currentDelay = MSRSAppSettings.loopGapDelay
+      valueLabel.text = String(format: "%.1fs", currentDelay)
+      valueLabel.font = .monospacedDigitSystemFont(ofSize: 17, weight: .semibold)
+      valueLabel.textAlignment = .right
+      valueLabel.setContentHuggingPriority(.required, for: .horizontal)
+      loopGapDelayValueLabel = valueLabel
+
+      let slider = UISlider()
+      slider.minimumValue = Float(MSRSAppSettings.loopGapDelayMin)
+      slider.maximumValue = Float(MSRSAppSettings.loopGapDelayMax)
+      slider.value = Float(currentDelay)
+      slider.addTarget(self, action: #selector(loopGapDelaySliderChanged(_:)), for: .valueChanged)
+      loopGapDelaySlider = slider
+
+      let row = UIStackView(arrangedSubviews: [label, slider, valueLabel])
+      row.axis = .horizontal
+      row.spacing = 12
+      row.alignment = .center
+      row.translatesAutoresizingMaskIntoConstraints = false
+      cell.contentView.addSubview(row)
+      NSLayoutConstraint.activate([
+        row.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 12),
+        row.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 20),
+        row.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -20),
+        row.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -12),
+        valueLabel.widthAnchor.constraint(equalToConstant: 50),
+      ])
       return cell
 
     case .autoFlip:

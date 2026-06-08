@@ -6,6 +6,23 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
 
   public typealias ID = Tagged<(Self, id: ()), Int64>
 
+  public enum CardType: Int, Sendable, Equatable {
+    case listening = 1
+    case reading = 2
+  }
+
+  public struct ReadingCardTargetWord: Sendable, Equatable {
+    public let termID: Int64
+    public let utf16Location: Int
+    public let utf16Length: Int
+
+    public init(termID: Int64, utf16Location: Int, utf16Length: Int) {
+      self.termID = termID
+      self.utf16Location = utf16Location
+      self.utf16Length = utf16Length
+    }
+  }
+
   public enum FrontVideoVisibility: Int, Sendable, Equatable, Codable {
     case blackScreen = 0
     case blurredThumbnail = 1
@@ -45,6 +62,9 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
   public var consecutiveCorrectAtCurrentSpeed: Int
   public var isSuspended: Bool
 
+  public let cardType: CardType
+  public let readingCardTargetWord: ReadingCardTargetWord?
+
   public init(
     id: ID,
     createdAt: Date,
@@ -61,7 +81,9 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     frontVideoVisibility: FrontVideoVisibility = .blackScreen,
     playbackSpeed: Double = 1.0,
     consecutiveCorrectAtCurrentSpeed: Int = 0,
-    isSuspended: Bool = false
+    isSuspended: Bool = false,
+    cardType: CardType = .listening,
+    readingCardTargetWord: ReadingCardTargetWord? = nil
   ) {
     self.id = id
     self.createdAt = createdAt
@@ -79,5 +101,7 @@ public struct SRSCardModel: Identifiable, Sendable, Equatable {
     self.playbackSpeed = playbackSpeed
     self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed
     self.isSuspended = isSuspended
+    self.cardType = cardType
+    self.readingCardTargetWord = readingCardTargetWord
   }
 }

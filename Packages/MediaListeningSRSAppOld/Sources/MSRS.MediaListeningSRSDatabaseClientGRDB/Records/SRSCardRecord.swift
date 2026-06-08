@@ -51,6 +51,11 @@ public struct SRSCardRecord: Codable, FetchableRecord, MutablePersistableRecord,
   // MARK: - Suspension
   public var isSuspended: Bool = false
 
+  // MARK: - Reading card target word (nil for listening cards)
+  public var targetTermID: Int64?
+  public var targetTermUTF16Location: Int?
+  public var targetTermUTF16Length: Int?
+
   public mutating func didInsert(_ inserted: InsertionSuccess) {
     id = inserted.rowID
   }

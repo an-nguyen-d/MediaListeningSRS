@@ -15,7 +15,7 @@ final class CandidateDetailView: UIView {
   private static let minVideoHeight: CGFloat = 120
   private static let maxVideoHeight: CGFloat = 800
   private static let defaultVideoHeight: CGFloat = 320
-  private static let loopGapSeconds: TimeInterval = 0.5
+  private static var loopGapSeconds: TimeInterval { MSRSAppSettings.loopGapDelay }
 
   private let scrollView = UIScrollView()
   private let stack = UIStackView()

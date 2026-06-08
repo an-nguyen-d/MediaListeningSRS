@@ -11,7 +11,9 @@ public final class RichDictionaryPopupController {
   private let configuration: DictionaryPopupConfiguration
 
   private var onMarkAsFullyKnownTapped: (() -> Void)?
+  private var onCreateReadingCardTapped: (() -> Void)?
   private var onDismiss: (() -> Void)?
+  private var createReadingCardButton: UIButton?
 
   public init(hostView: UIView) {
     self.hostView = hostView
@@ -26,6 +28,7 @@ public final class RichDictionaryPopupController {
     self.presenter = DictionaryPopupPresenter(containerView: hostView, configuration: config)
 
     presenter.didDismiss = { [weak self] in
+      self?.removeCreateReadingCardButton()
       self?.onDismiss?()
     }
   }
@@ -34,11 +37,14 @@ public final class RichDictionaryPopupController {
     viewModel: DictionaryLookupViewModel,
     tappedWordFrame: CGRect,
     isAlreadyFullyKnown: Bool,
+    showCreateReadingCardButton: Bool = false,
     onMarkAsFullyKnownTapped: @escaping () -> Void,
+    onCreateReadingCardTapped: (() -> Void)? = nil,
     onDismiss: @escaping () -> Void
   ) {
     guard let hostView = hostView else { return }
     self.onMarkAsFullyKnownTapped = onMarkAsFullyKnownTapped
+    self.onCreateReadingCardTapped = onCreateReadingCardTapped
     self.onDismiss = onDismiss
 
     presenter.didTapMarkAsKnownButton = { [weak self] in
@@ -69,9 +75,56 @@ public final class RichDictionaryPopupController {
       showMarkAsKnownButton: true,
       isAlreadyKnown: isAlreadyFullyKnown
     )
+
+    if showCreateReadingCardButton {
+      addCreateReadingCardButton(popupFrame: positionerOutput.frame, in: hostView)
+    }
   }
 
   public func dismiss() {
+    removeCreateReadingCardButton()
     presenter.dismiss()
+  }
+
+  private func addCreateReadingCardButton(popupFrame: CGRect, in hostView: UIView) {
+    removeCreateReadingCardButton()
+
+    var config = UIButton.Configuration.filled()
+    config.baseBackgroundColor = .systemPurple
+    config.baseForegroundColor = .white
+    config.cornerStyle = .medium
+    config.image = UIImage(systemName: "plus.rectangle.on.rectangle")
+    config.imagePadding = 6
+    config.title = "Create Card"
+    config.contentInsets = .init(top: 8, leading: 12, bottom: 8, trailing: 12)
+
+    let button = UIButton(configuration: config)
+    button.addAction(UIAction { [weak self] _ in
+      self?.onCreateReadingCardTapped?()
+      self?.dismiss()
+    }, for: .touchUpInside)
+
+    hostView.addSubview(button)
+    button.sizeToFit()
+
+    let buttonSize = button.intrinsicContentSize
+    let buttonX = min(
+      max(popupFrame.midX - buttonSize.width / 2, 8),
+      hostView.bounds.width - buttonSize.width - 8
+    )
+    let buttonY = popupFrame.maxY + 6
+    button.frame = CGRect(x: buttonX, y: buttonY, width: buttonSize.width, height: buttonSize.height)
+
+    if button.frame.maxY > hostView.bounds.height - 8 {
+      let aboveY = popupFrame.minY - buttonSize.height - 6
+      button.frame.origin.y = max(8, aboveY)
+    }
+
+    self.createReadingCardButton = button
+  }
+
+  private func removeCreateReadingCardButton() {
+    createReadingCardButton?.removeFromSuperview()
+    createReadingCardButton = nil
   }
 }

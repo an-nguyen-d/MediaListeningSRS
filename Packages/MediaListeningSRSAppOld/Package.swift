@@ -124,6 +124,7 @@ enum PackageTarget: String, CaseIterable {
       return createPackageTarget(
         dependencies: createTargetDependencies(
           .AppDependencies,
+          .ClipExportService,
           .ClipStorageClient,
           .HomeScene,
           .MediaSourceImportService,
@@ -134,6 +135,7 @@ enum PackageTarget: String, CaseIterable {
           .WordsListScene
         ) + [
           PackageDependency.ElixirSync.Product.ElixirSyncClient.targetDependency,
+          PackageDependency.JapaneseMediaLibrary.Product.JMLDatabaseClient.targetDependency,
         ]
       )
 

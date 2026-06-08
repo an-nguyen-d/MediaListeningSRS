@@ -86,6 +86,12 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       handleSuspendCard()
     case .showCardHistory:
       handleShowCardHistory()
+    case .editTranscript:
+      handleEditTranscript()
+    case .updateTranscript(let newText):
+      handleUpdateTranscript(newText)
+    case .createReadingCard(let sourceCardID, let termID, let utf16Location, let utf16Length):
+      handleCreateReadingCard(sourceCardID: sourceCardID, termID: termID, utf16Location: utf16Location, utf16Length: utf16Length)
     }
   }
 
@@ -134,13 +140,15 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     guard currentBatchIndex < currentBatch.count else { return }
     let card = currentBatch[currentBatchIndex]
     let ratingRawValue: Int = (grade == .fail) ? 1 : 3
+    let effectiveListenCount: Int? = card.cardType == .reading ? nil : listenCount
     Task { [mediaListeningSRSDatabaseClient, presenter] in
       do {
         let response = try await mediaListeningSRSDatabaseClient.srsCard.recordReview(
-          .init(cardID: card.id, ratingRawValue: ratingRawValue, listenCount: listenCount)
+          .init(cardID: card.id, ratingRawValue: ratingRawValue, listenCount: effectiveListenCount)
         )
         let updated = response.updatedModel
-        if grade == .pass,
+        if card.cardType == .listening,
+           grade == .pass,
            updated.playbackSpeed < 1.0,
            updated.consecutiveCorrectAtCurrentSpeed >= 2 {
           let newSpeed = min(1.0, (updated.playbackSpeed * 100 + 5).rounded() / 100)
@@ -193,6 +201,167 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     }
   }
 
+  private func handleEditTranscript() {
+    guard currentBatchIndex < currentBatch.count else { return }
+    let card = currentBatch[currentBatchIndex]
+    presenter.presentEditTranscript(currentText: card.cachedTranscriptText)
+  }
+
+  private func handleUpdateTranscript(_ newText: String) {
+    guard currentBatchIndex < currentBatch.count else { return }
+    let card = currentBatch[currentBatchIndex]
+    let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, trimmed != card.cachedTranscriptText else { return }
+
+    let adjustedRanges = Self.adjustLabelRanges(
+      card.cachedLabelRanges,
+      oldText: card.cachedTranscriptText,
+      newText: trimmed
+    )
+
+    Task { [mediaListeningSRSDatabaseClient] in
+      do {
+        _ = try await mediaListeningSRSDatabaseClient.srsCard.batchUpdateCachedTranscripts(.init(
+          updates: [.init(
+            cardID: card.id,
+            cachedTranscriptText: trimmed,
+            cachedEnglishTranslation: card.cachedEnglishTranslation
+          )]
+        ))
+        _ = try await mediaListeningSRSDatabaseClient.srsCard.batchUpdateCachedLabelRanges(.init(
+          updates: [.init(
+            cardID: card.id,
+            labelRangesJSON: SRSCardLabelRange.encodeToJSON(adjustedRanges)
+          )]
+        ))
+        await MainActor.run { [weak self] in
+          guard let self, self.currentBatchIndex < self.currentBatch.count else { return }
+          let existing = self.currentBatch[self.currentBatchIndex]
+          self.currentBatch[self.currentBatchIndex] = SRSCardModel(
+            id: existing.id,
+            createdAt: existing.createdAt,
+            lastUpdatedAt: Date(),
+            mediaSourceID: existing.mediaSourceID,
+            subtitleIndexStart: existing.subtitleIndexStart,
+            subtitleIndexEnd: existing.subtitleIndexEnd,
+            clipStartTimeSeconds: existing.clipStartTimeSeconds,
+            clipEndTimeSeconds: existing.clipEndTimeSeconds,
+            clipRelativeFilePath: existing.clipRelativeFilePath,
+            cachedTranscriptText: trimmed,
+            cachedEnglishTranslation: existing.cachedEnglishTranslation,
+            cachedLabelRanges: adjustedRanges,
+            frontVideoVisibility: existing.frontVideoVisibility,
+            playbackSpeed: existing.playbackSpeed,
+            consecutiveCorrectAtCurrentSpeed: existing.consecutiveCorrectAtCurrentSpeed,
+            isSuspended: existing.isSuspended,
+            cardType: existing.cardType,
+            readingCardTargetWord: existing.readingCardTargetWord
+          )
+          self.emitCurrentCard()
+        }
+      } catch {
+        await MainActor.run { [weak self] in
+          self?.presenter.presentError("Failed to save transcript: \(error.localizedDescription)")
+        }
+      }
+    }
+  }
+
+  static func adjustLabelRanges(
+    _ ranges: [SRSCardLabelRange],
+    oldText: String,
+    newText: String
+  ) -> [SRSCardLabelRange] {
+    let oldUTF16 = Array(oldText.utf16)
+    let newUTF16 = Array(newText.utf16)
+
+    let deletions = Self.findDeletions(old: oldUTF16, new: newUTF16)
+    guard !deletions.isEmpty else { return ranges }
+
+    var result: [SRSCardLabelRange] = []
+    for range in ranges {
+      let rangeStart = range.utf16Location
+      let rangeEnd = rangeStart + range.utf16Length
+
+      var overlaps = false
+      var totalShift = 0
+      for deletion in deletions {
+        let delEnd = deletion.location + deletion.length
+        if deletion.location < rangeEnd && delEnd > rangeStart {
+          overlaps = true
+          break
+        }
+        if delEnd <= rangeStart {
+          totalShift += deletion.length
+        }
+      }
+
+      if overlaps { continue }
+
+      result.append(.init(
+        utf16Location: rangeStart - totalShift,
+        utf16Length: range.utf16Length,
+        termID: range.termID,
+        inflectionKey: range.inflectionKey
+      ))
+    }
+    return result
+  }
+
+  private static func findDeletions(
+    old: [UTF16.CodeUnit],
+    new: [UTF16.CodeUnit]
+  ) -> [(location: Int, length: Int)] {
+    var deletions: [(location: Int, length: Int)] = []
+    var oi = 0
+    var ni = 0
+
+    while oi < old.count && ni < new.count {
+      if old[oi] == new[ni] {
+        oi += 1
+        ni += 1
+      } else {
+        let delStart = oi
+        while oi < old.count {
+          if ni < new.count && old[oi] == new[ni] { break }
+          oi += 1
+        }
+        deletions.append((location: delStart, length: oi - delStart))
+      }
+    }
+
+    if oi < old.count {
+      deletions.append((location: oi, length: old.count - oi))
+    }
+
+    return deletions
+  }
+
+  private func handleCreateReadingCard(
+    sourceCardID: SRSCardModel.ID,
+    termID: Int64,
+    utf16Location: Int,
+    utf16Length: Int
+  ) {
+    Task { [mediaListeningSRSDatabaseClient, presenter] in
+      do {
+        _ = try await mediaListeningSRSDatabaseClient.srsCard.createReadingCard(.init(
+          sourceCardID: sourceCardID,
+          targetTermID: termID,
+          targetTermUTF16Location: utf16Location,
+          targetTermUTF16Length: utf16Length
+        ))
+        await MainActor.run {
+          presenter.presentReadingCardCreated()
+        }
+      } catch {
+        await MainActor.run {
+          presenter.presentError(error.localizedDescription)
+        }
+      }
+    }
+  }
+
   private func handleViewDidLoad() {
     fetchNextBatch()
   }
@@ -237,6 +406,14 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   }
 
   private func handleTermTapped(_ termID: Int64) {
+    let currentCard = currentBatchIndex < currentBatch.count ? currentBatch[currentBatchIndex] : nil
+    let isListeningCard = currentCard?.cardType == .listening
+
+    let matchingLabelRange = currentCard?.cachedLabelRanges.first(where: { $0.termID == termID })
+    let tappedRange: NSRange? = matchingLabelRange.map {
+      NSRange(location: $0.utf16Location, length: $0.utf16Length)
+    }
+
     Task { [dictionaryClient, mediaListeningSRSDatabaseClient, presenter] in
       do {
         guard let lookup = try await dictionaryClient.lookupByID(.init(termID: Int(termID))) else {
@@ -251,7 +428,10 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
           presenter.presentDictionaryLookup(.init(
             japaneseTermID: termID,
             viewModel: viewModel,
-            isAlreadyFullyKnown: isKnownResp.isFullyKnown
+            isAlreadyFullyKnown: isKnownResp.isFullyKnown,
+            tappedRange: tappedRange,
+            showCreateReadingCardButton: isListeningCard,
+            sourceCardID: isListeningCard ? currentCard?.id : nil
           ))
         }
       } catch {
@@ -265,7 +445,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   private func emitCurrentCard() {
     guard currentBatchIndex < currentBatch.count else { return }
     let card = currentBatch[currentBatchIndex]
-    Task { [weak self, mediaListeningSRSDatabaseClient, clipStorageClient, exportedClipsDirectoryURL] in
+    Task { [weak self, mediaListeningSRSDatabaseClient, dictionaryClient, clipStorageClient, exportedClipsDirectoryURL] in
       guard let self else { return }
       let intervals = try? await mediaListeningSRSDatabaseClient.srsCard.previewNextIntervals(
         .init(cardID: card.id)
@@ -315,6 +495,17 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       }
       #endif
 
+      var readingKana: String?
+      var readingDefinition: String?
+      if card.cardType == .reading, let target = card.readingCardTargetWord {
+        let lookup = try? await dictionaryClient.lookupByID(.init(termID: Int(target.termID)))
+        readingKana = lookup?.spellings
+          .filter { $0.isKanaSpelling }
+          .min(by: { $0.spellingRank < $1.spellingRank })?
+          .spelling
+        readingDefinition = lookup?.senses.first?.meaning
+      }
+
       await MainActor.run {
         self.buildAndPresent(
           card: card,
@@ -322,7 +513,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
           translationText: translationText,
           labeledRanges: labeledRanges,
           failIntervalSeconds: intervals?.failIntervalSeconds,
-          passIntervalSeconds: intervals?.passIntervalSeconds
+          passIntervalSeconds: intervals?.passIntervalSeconds,
+          readingCardKana: readingKana,
+          readingCardDefinition: readingDefinition
         )
         #if !targetEnvironment(macCatalyst)
         self.prefetchUpcomingCards()
@@ -337,7 +530,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     translationText: String?,
     labeledRanges: [HighlightableTranscriptLabeledRange],
     failIntervalSeconds: TimeInterval? = nil,
-    passIntervalSeconds: TimeInterval? = nil
+    passIntervalSeconds: TimeInterval? = nil,
+    readingCardKana: String? = nil,
+    readingCardDefinition: String? = nil
   ) {
     self.currentTranscriptText = transcriptText
     self.currentEnglishTranslationText = translationText
@@ -365,7 +560,11 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       playbackSpeed: card.playbackSpeed,
       consecutiveCorrectAtCurrentSpeed: card.consecutiveCorrectAtCurrentSpeed,
       failIntervalSeconds: failIntervalSeconds,
-      passIntervalSeconds: passIntervalSeconds
+      passIntervalSeconds: passIntervalSeconds,
+      cardType: card.cardType,
+      readingCardTargetWord: card.readingCardTargetWord,
+      readingCardKana: readingCardKana,
+      readingCardDefinition: readingCardDefinition
     ))
   }
 
@@ -410,6 +609,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     let remaining = String(text[swiftIndex...].prefix(15))
     guard !remaining.isEmpty else { return }
 
+    let currentCard = currentBatchIndex < currentBatch.count ? currentBatch[currentBatchIndex] : nil
+    let isListeningCard = currentCard?.cardType == .listening
+
     Task { [japaneseParserClient, mediaListeningSRSDatabaseClient, presenter] in
       do {
         let response = try await japaneseParserClient.prefixDictionaryLookup(
@@ -442,7 +644,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
             japaneseTermID: termID,
             viewModel: viewModel,
             isAlreadyFullyKnown: isKnownResp.isFullyKnown,
-            tappedRange: tappedRange
+            tappedRange: tappedRange,
+            showCreateReadingCardButton: isListeningCard,
+            sourceCardID: isListeningCard ? currentCard?.id : nil
           ))
         }
       } catch {

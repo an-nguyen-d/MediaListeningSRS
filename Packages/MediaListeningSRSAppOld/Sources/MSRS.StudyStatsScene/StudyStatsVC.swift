@@ -9,6 +9,7 @@ public final class StudyStatsVC: UIViewController {
   private let dbClient: MediaListeningSRSDatabaseClient
   private let tableView = UITableView(frame: .zero, style: .insetGrouped)
 
+  private var liveStateCounts: MediaListeningSRSDatabaseClient.SRSCard.FetchCardStateCounts.Response?
   private var todayDuration: TimeInterval = 0
   private var todayCards: Int = 0
   private var todaySessions: Int = 0
@@ -110,7 +111,12 @@ public final class StudyStatsVC: UIViewController {
           .init(limit: 10)
         )
 
+        let liveCountsResponse = try await dbClient.srsCard.fetchCardStateCounts(
+          .init(asOf: now)
+        )
+
         await MainActor.run {
+          self.liveStateCounts = liveCountsResponse
           self.todayDuration = todayResponse.models.reduce(0) {
             $0 + $1.endedAt.timeIntervalSince($1.startedAt)
           }
@@ -188,30 +194,32 @@ public final class StudyStatsVC: UIViewController {
 
 extension StudyStatsVC: UITableViewDataSource {
 
-  public func numberOfSections(in tableView: UITableView) -> Int { 7 }
+  public func numberOfSections(in tableView: UITableView) -> Int { 8 }
 
   public func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
     switch section {
-    case 0: return 3
-    case 1: return 1
+    case 0: return liveStateCounts != nil ? 7 : 1
+    case 1: return 3
     case 2: return 1
-    case 3: return max(recentSessions.count, 1)
-    case 4: return max(recentReviewEvents.count, 1)
-    case 5: return latestSnapshot != nil ? 5 : 1
-    case 6: return max(recentSnapshots.count, 1)
+    case 3: return 1
+    case 4: return max(recentSessions.count, 1)
+    case 5: return max(recentReviewEvents.count, 1)
+    case 6: return latestSnapshot != nil ? 5 : 1
+    case 7: return max(recentSnapshots.count, 1)
     default: return 0
     }
   }
 
   public func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
     switch section {
-    case 0: return "Today"
-    case 1: return "Cards Reviewed (Last 7 Days)"
-    case 2: return "Time Studied (Last 7 Days)"
-    case 3: return "Recent Sessions"
-    case 4: return "Recent Reviews"
-    case 5: return "Deck Snapshot (Latest)"
-    case 6: return "Snapshot History (30 days)"
+    case 0: return "Deck Overview (Live)"
+    case 1: return "Today"
+    case 2: return "Cards Reviewed (Last 7 Days)"
+    case 3: return "Time Studied (Last 7 Days)"
+    case 4: return "Recent Sessions"
+    case 5: return "Recent Reviews"
+    case 6: return "Deck Snapshot (Latest)"
+    case 7: return "Snapshot History (30 days)"
     default: return nil
     }
   }
@@ -219,6 +227,49 @@ extension StudyStatsVC: UITableViewDataSource {
   public func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
     switch indexPath.section {
     case 0:
+      guard let counts = liveStateCounts else {
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        cell.textLabel?.text = "Loading..."
+        cell.textLabel?.textColor = .secondaryLabel
+        cell.selectionStyle = .none
+        return cell
+      }
+      let cell = UITableViewCell(style: .value1, reuseIdentifier: nil)
+      cell.selectionStyle = .none
+      switch indexPath.row {
+      case 0:
+        cell.textLabel?.text = "Total Cards"
+        cell.detailTextLabel?.text = "\(counts.totalCards)"
+      case 1:
+        cell.textLabel?.text = "New"
+        cell.detailTextLabel?.text = "\(counts.newCount)"
+        cell.detailTextLabel?.textColor = .systemBlue
+      case 2:
+        cell.textLabel?.text = "Learning"
+        cell.detailTextLabel?.text = "\(counts.learningCount)"
+        cell.detailTextLabel?.textColor = .systemOrange
+      case 3:
+        cell.textLabel?.text = "Review"
+        cell.detailTextLabel?.text = "\(counts.reviewCount)"
+        cell.detailTextLabel?.textColor = .systemGreen
+      case 4:
+        cell.textLabel?.text = "Relearning"
+        cell.detailTextLabel?.text = "\(counts.relearningCount)"
+        cell.detailTextLabel?.textColor = .systemRed
+      case 5:
+        cell.textLabel?.text = "Suspended"
+        cell.detailTextLabel?.text = "\(counts.suspendedCount)"
+        cell.detailTextLabel?.textColor = .secondaryLabel
+      case 6:
+        cell.textLabel?.text = "Due Now"
+        cell.detailTextLabel?.text = "\(counts.dueNowCount)"
+        cell.detailTextLabel?.textColor = .systemPurple
+      default:
+        break
+      }
+      return cell
+
+    case 1:
       let cell = UITableViewCell(style: .value1, reuseIdentifier: nil)
       cell.selectionStyle = .none
       switch indexPath.row {
@@ -236,7 +287,7 @@ extension StudyStatsVC: UITableViewDataSource {
       }
       return cell
 
-    case 1:
+    case 2:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
       cell.selectionStyle = .none
       barChartView.removeFromSuperview()
@@ -251,7 +302,7 @@ extension StudyStatsVC: UITableViewDataSource {
       ])
       return cell
 
-    case 2:
+    case 3:
       let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
       cell.selectionStyle = .none
       timeBarChartView.removeFromSuperview()
@@ -266,7 +317,7 @@ extension StudyStatsVC: UITableViewDataSource {
       ])
       return cell
 
-    case 3:
+    case 4:
       if recentSessions.isEmpty {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No study sessions yet"
@@ -288,7 +339,7 @@ extension StudyStatsVC: UITableViewDataSource {
       cell.detailTextLabel?.textColor = .secondaryLabel
       return cell
 
-    case 4:
+    case 5:
       if recentReviewEvents.isEmpty {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No reviews yet"
@@ -313,7 +364,7 @@ extension StudyStatsVC: UITableViewDataSource {
       cell.detailTextLabel?.textColor = gradeColor
       return cell
 
-    case 5:
+    case 6:
       guard let snapshot = latestSnapshot else {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No snapshots yet"
@@ -346,7 +397,7 @@ extension StudyStatsVC: UITableViewDataSource {
       }
       return cell
 
-    case 6:
+    case 7:
       if recentSnapshots.isEmpty {
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.textLabel?.text = "No snapshots yet"

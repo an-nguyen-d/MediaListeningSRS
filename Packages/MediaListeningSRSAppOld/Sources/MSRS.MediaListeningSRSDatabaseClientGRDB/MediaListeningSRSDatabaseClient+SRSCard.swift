@@ -75,8 +75,78 @@ extension MediaListeningSRSDatabaseClient {
           return .init(model: GRDBMapper.SRSCard.mapToModel(from: record))
         }
       },
+      createReadingCard: { request in
+        try await databaseWriter.write { db in
+          guard let sourceRecord = try SRSCardRecord.fetchOne(db, key: request.sourceCardID.rawValue) else {
+            throw MediaListeningSRSDatabaseError.recordNotFound(id: request.sourceCardID.rawValue)
+          }
+
+          let existingCount = try Int.fetchOne(db, sql: """
+            SELECT COUNT(*) FROM srsCardRecord
+            WHERE cardType = 2
+              AND clipRelativeFilePath = ?
+              AND targetTermID = ?
+              AND targetTermUTF16Location = ?
+          """, arguments: [
+            sourceRecord.clipRelativeFilePath,
+            request.targetTermID,
+            request.targetTermUTF16Location
+          ]) ?? 0
+          if existingCount > 0 {
+            throw NSError(
+              domain: "MediaListeningSRSDatabaseClient.SRSCard.createReadingCard",
+              code: 2,
+              userInfo: [NSLocalizedDescriptionKey: "A reading card for this word already exists"]
+            )
+          }
+
+          let minDueDate: Date? = try Date.fetchOne(db, sql: """
+            SELECT MIN(dueDate) FROM srsCardRecord
+            WHERE dueDate IS NOT NULL AND isSuspended = 0
+          """)
+          let newDueDate = minDueDate.map { $0.addingTimeInterval(-1) } ?? Date.distantPast
+
+          let now = Date()
+          var newRecord = SRSCardRecord(
+            id: nil,
+            createdAt: now,
+            lastUpdatedAt: now,
+            mediaSourceID: sourceRecord.mediaSourceID,
+            subtitleIndexStart: sourceRecord.subtitleIndexStart,
+            subtitleIndexEnd: sourceRecord.subtitleIndexEnd,
+            clipStartTimeSeconds: sourceRecord.clipStartTimeSeconds,
+            clipEndTimeSeconds: sourceRecord.clipEndTimeSeconds,
+            clipRelativeFilePath: sourceRecord.clipRelativeFilePath,
+            cachedTranscriptText: sourceRecord.cachedTranscriptText,
+            cachedEnglishTranslation: sourceRecord.cachedEnglishTranslation,
+            cachedLabelRangesJSON: sourceRecord.cachedLabelRangesJSON
+          )
+          newRecord.cardType = 2
+          newRecord.dueDate = newDueDate
+          newRecord.targetTermID = request.targetTermID
+          newRecord.targetTermUTF16Location = request.targetTermUTF16Location
+          newRecord.targetTermUTF16Length = request.targetTermUTF16Length
+          try newRecord.insert(db)
+
+          if let newCardID = newRecord.id {
+            try db.execute(sql: """
+              INSERT INTO srsCardJapaneseTermLinkRecord (cardID, japaneseTermID, inflectionKey)
+              SELECT ?, japaneseTermID, inflectionKey
+              FROM srsCardJapaneseTermLinkRecord
+              WHERE cardID = ?
+            """, arguments: [newCardID, request.sourceCardID.rawValue])
+          }
+
+          return .init(model: GRDBMapper.SRSCard.mapToModel(from: newRecord))
+        }
+      },
       delete: { request in
         try await databaseWriter.write { db in
+          guard let record = try SRSCardRecord.fetchOne(db, key: request.id.rawValue) else {
+            throw MediaListeningSRSDatabaseError.recordNotFound(id: request.id.rawValue)
+          }
+          let cardType = record.cardType
+
           let linkRows = try Row.fetchAll(db, sql: """
             SELECT japaneseTermID, inflectionKey FROM srsCardJapaneseTermLinkRecord WHERE cardID = ?
           """, arguments: [request.id.rawValue])
@@ -91,12 +161,14 @@ extension MediaListeningSRSDatabaseClient {
             throw MediaListeningSRSDatabaseError.recordNotFound(id: request.id.rawValue)
           }
 
-          for link in links {
-            try db.execute(sql: """
-              UPDATE japaneseTermCardCoverageRecord
-              SET cardCoverageCount = MAX(0, cardCoverageCount - 1)
-              WHERE japaneseTermID = ? AND inflectionKey = ?
-            """, arguments: [link.japaneseTermID, link.inflectionKey])
+          if cardType == 1 {
+            for link in links {
+              try db.execute(sql: """
+                UPDATE japaneseTermCardCoverageRecord
+                SET cardCoverageCount = MAX(0, cardCoverageCount - 1)
+                WHERE japaneseTermID = ? AND inflectionKey = ?
+              """, arguments: [link.japaneseTermID, link.inflectionKey])
+            }
           }
 
           return .init()
@@ -364,6 +436,16 @@ extension MediaListeningSRSDatabaseClient {
           return .init(cards: records.map { GRDBMapper.SRSCard.mapToModel(from: $0) })
         }
       },
+      fetchCardsWithEmptyClipPath: { _ in
+        try await databaseWriter.read { db in
+          let records = try SRSCardRecord.fetchAll(db, sql: """
+            SELECT * FROM srsCardRecord
+            WHERE clipRelativeFilePath = ''
+            ORDER BY mediaSourceID ASC, subtitleIndexStart ASC
+          """)
+          return .init(cards: records.map { GRDBMapper.SRSCard.mapToModel(from: $0) })
+        }
+      },
       countDueCards: { request in
         try await databaseWriter.read { db in
           let count = try Int.fetchOne(db, sql: """
@@ -373,6 +455,45 @@ extension MediaListeningSRSDatabaseClient {
               AND (dueDate IS NULL OR dueDate <= ?)
           """, arguments: [request.asOf]) ?? 0
           return .init(count: count)
+        }
+      },
+      fetchCardStateCounts: { request in
+        try await databaseWriter.read { db in
+          let stateCounts = try Row.fetchAll(db, sql: """
+            SELECT stateRawValue, COUNT(*) as cnt
+            FROM srsCardRecord
+            WHERE isSuspended = 0
+            GROUP BY stateRawValue
+          """)
+          var countsByState: [Int: Int] = [:]
+          for row in stateCounts {
+            guard let state: Int = row["stateRawValue"],
+                  let cnt: Int = row["cnt"] else { continue }
+            countsByState[state] = cnt
+          }
+
+          let suspendedCount = try Int.fetchOne(db, sql: """
+            SELECT COUNT(*) FROM srsCardRecord WHERE isSuspended = 1
+          """) ?? 0
+
+          let dueNowCount = try Int.fetchOne(db, sql: """
+            SELECT COUNT(*) FROM srsCardRecord
+            WHERE clipRelativeFilePath != ''
+              AND isSuspended = 0
+              AND (dueDate IS NULL OR dueDate <= ?)
+          """, arguments: [request.asOf]) ?? 0
+
+          let totalActive = countsByState.values.reduce(0, +)
+
+          return .init(
+            totalCards: totalActive + suspendedCount,
+            newCount: countsByState[0, default: 0],
+            learningCount: countsByState[1, default: 0],
+            reviewCount: countsByState[2, default: 0],
+            relearningCount: countsByState[3, default: 0],
+            suspendedCount: suspendedCount,
+            dueNowCount: dueNowCount
+          )
         }
       },
       suspendCard: { request in

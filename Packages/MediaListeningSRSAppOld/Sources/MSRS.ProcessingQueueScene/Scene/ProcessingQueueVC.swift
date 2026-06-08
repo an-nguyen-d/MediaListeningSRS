@@ -388,7 +388,11 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
   private func updateCreateAllProgress(completed: Int, total: Int) {
     guard let overlay = createAllOverlay,
           let progressView = overlay.subviews.compactMap({ $0 as? CreateAllProgressView }).first else { return }
-    progressView.update(completed: completed, total: total)
+    if completed == -1 {
+      progressView.showExportingPhase()
+    } else {
+      progressView.update(completed: completed, total: total)
+    }
   }
 
   private func handleCreateAllFinished(created: Int, errors: Int) {
