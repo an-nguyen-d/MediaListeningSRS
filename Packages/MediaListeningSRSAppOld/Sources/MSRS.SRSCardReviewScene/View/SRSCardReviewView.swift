@@ -71,7 +71,9 @@ final class SRSCardReviewView: UIView {
   private let backTargetWordAnnotationLabel = UILabel()
   private let backLoopButton = UIButton(type: .system)
   private let backFailButton = UIButton(type: .system)
-  private let backPassButton = UIButton(type: .system)
+  private let backHardButton = UIButton(type: .system)
+  private let backMediumButton = UIButton(type: .system)
+  private let backEasyButton = UIButton(type: .system)
   private let backSuspendButton = UIButton(type: .system)
   private let backHistoryButton = UIButton(type: .system)
   private let backEditTranscriptButton = UIButton(type: .system)
@@ -477,8 +479,12 @@ final class SRSCardReviewView: UIView {
 
     Self.styleAction(backFailButton, title: "Fail", hotkey: "1", backgroundColor: .systemRed)
     backFailButton.addTarget(self, action: #selector(handleFailTap), for: .touchUpInside)
-    Self.styleAction(backPassButton, title: "Pass", hotkey: "2", backgroundColor: .systemGreen)
-    backPassButton.addTarget(self, action: #selector(handlePassTap), for: .touchUpInside)
+    Self.styleAction(backHardButton, title: "Hard", hotkey: "2", backgroundColor: .systemOrange)
+    backHardButton.addTarget(self, action: #selector(handleHardTap), for: .touchUpInside)
+    Self.styleAction(backMediumButton, title: "Medium", hotkey: "3", backgroundColor: .systemGreen)
+    backMediumButton.addTarget(self, action: #selector(handleMediumTap), for: .touchUpInside)
+    Self.styleAction(backEasyButton, title: "Easy", hotkey: "4", backgroundColor: .systemTeal)
+    backEasyButton.addTarget(self, action: #selector(handleEasyTap), for: .touchUpInside)
 
     var suspendConfig = UIButton.Configuration.tinted()
     suspendConfig.title = "Suspend"
@@ -595,16 +601,16 @@ final class SRSCardReviewView: UIView {
     autoPassFillView.isUserInteractionEnabled = false
     autoPassFillView.translatesAutoresizingMaskIntoConstraints = false
     autoPassFillView.isHidden = true
-    backPassButton.clipsToBounds = true
-    backPassButton.insertSubview(autoPassFillView, at: 0)
+    backMediumButton.clipsToBounds = true
+    backMediumButton.insertSubview(autoPassFillView, at: 0)
 
     let widthConstraint = autoPassFillView.widthAnchor.constraint(equalToConstant: 0)
     autoPassFillWidthConstraint = widthConstraint
 
     NSLayoutConstraint.activate([
-      autoPassFillView.topAnchor.constraint(equalTo: backPassButton.topAnchor),
-      autoPassFillView.leadingAnchor.constraint(equalTo: backPassButton.leadingAnchor),
-      autoPassFillView.bottomAnchor.constraint(equalTo: backPassButton.bottomAnchor),
+      autoPassFillView.topAnchor.constraint(equalTo: backMediumButton.topAnchor),
+      autoPassFillView.leadingAnchor.constraint(equalTo: backMediumButton.leadingAnchor),
+      autoPassFillView.bottomAnchor.constraint(equalTo: backMediumButton.bottomAnchor),
       widthConstraint,
     ])
   }
@@ -634,9 +640,9 @@ final class SRSCardReviewView: UIView {
     backTopRow.spacing = 16
     backTopRow.translatesAutoresizingMaskIntoConstraints = false
 
-    let backGradeRow = UIStackView(arrangedSubviews: [backFailButton, backPassButton])
+    let backGradeRow = UIStackView(arrangedSubviews: [backFailButton, backHardButton, backMediumButton, backEasyButton])
     backGradeRow.axis = .horizontal
-    backGradeRow.spacing = 16
+    backGradeRow.spacing = 8
     backGradeRow.distribution = .fillEqually
     backGradeRow.translatesAutoresizingMaskIntoConstraints = false
 
@@ -849,9 +855,9 @@ final class SRSCardReviewView: UIView {
     addSubview(settingsDimView)
     addSubview(settingsPanel)
 
-    let backGradeRow = UIStackView(arrangedSubviews: [backFailButton, backPassButton])
+    let backGradeRow = UIStackView(arrangedSubviews: [backFailButton, backHardButton, backMediumButton, backEasyButton])
     backGradeRow.axis = .horizontal
-    backGradeRow.spacing = 16
+    backGradeRow.spacing = 8
     backGradeRow.distribution = .fillEqually
     backGradeRow.translatesAutoresizingMaskIntoConstraints = false
 
@@ -989,7 +995,9 @@ final class SRSCardReviewView: UIView {
     buttonHeightConstraints = [
       frontShowBackButton.heightAnchor.constraint(equalToConstant: height),
       backFailButton.heightAnchor.constraint(equalToConstant: height),
-      backPassButton.heightAnchor.constraint(equalToConstant: height),
+      backHardButton.heightAnchor.constraint(equalToConstant: height),
+      backMediumButton.heightAnchor.constraint(equalToConstant: height),
+      backEasyButton.heightAnchor.constraint(equalToConstant: height),
     ]
     NSLayoutConstraint.activate(buttonHeightConstraints)
   }
@@ -1125,7 +1133,9 @@ final class SRSCardReviewView: UIView {
 
     updateGradeButtonTitles(
       failInterval: viewModel.failIntervalSeconds,
-      passInterval: viewModel.passIntervalSeconds
+      hardInterval: viewModel.hardIntervalSeconds,
+      mediumInterval: viewModel.mediumIntervalSeconds,
+      easyInterval: viewModel.easyIntervalSeconds
     )
     currentThumbnailFileURL = viewModel.thumbnailFileURL
     currentVideoFileURL = viewModel.videoFileURL
@@ -1358,12 +1368,20 @@ final class SRSCardReviewView: UIView {
 
   private func resetGradeButtonHighlights() {
     backFailButton.layer.borderWidth = 0
-    backPassButton.layer.borderWidth = 0
+    backHardButton.layer.borderWidth = 0
+    backMediumButton.layer.borderWidth = 0
+    backEasyButton.layer.borderWidth = 0
   }
 
   private func highlightRecommendedGrade(_ grade: SRSCardReviewModels.Grade) {
     resetGradeButtonHighlights()
-    let button = grade == .pass ? backPassButton : backFailButton
+    let button: UIButton
+    switch grade {
+    case .fail: button = backFailButton
+    case .hard: button = backHardButton
+    case .medium: button = backMediumButton
+    case .easy: button = backEasyButton
+    }
     button.layer.borderColor = UIColor.label.cgColor
     button.layer.borderWidth = 3
     button.layer.cornerRadius = 10
@@ -1611,9 +1629,19 @@ final class SRSCardReviewView: UIView {
     onGraded?(.fail)
   }
 
-  @objc private func handlePassTap() {
+  @objc private func handleHardTap() {
     stopAutoPassTimer()
-    onGraded?(.pass)
+    onGraded?(.hard)
+  }
+
+  @objc private func handleMediumTap() {
+    stopAutoPassTimer()
+    onGraded?(.medium)
+  }
+
+  @objc private func handleEasyTap() {
+    stopAutoPassTimer()
+    onGraded?(.easy)
   }
 
   private func cancelAutoPass() {
@@ -1721,7 +1749,9 @@ final class SRSCardReviewView: UIView {
     autoPassStartDate = Date()
 
     backFailButton.configuration?.baseBackgroundColor = .systemRed.withAlphaComponent(0.3)
-    backPassButton.configuration?.baseBackgroundColor = .systemGreen.withAlphaComponent(0.3)
+    backHardButton.configuration?.baseBackgroundColor = .systemOrange.withAlphaComponent(0.3)
+    backMediumButton.configuration?.baseBackgroundColor = .systemGreen.withAlphaComponent(0.3)
+    backEasyButton.configuration?.baseBackgroundColor = .systemTeal.withAlphaComponent(0.3)
     autoPassFillView.isHidden = false
     autoPassFillWidthConstraint?.constant = 0
     layoutIfNeeded()
@@ -1741,11 +1771,11 @@ final class SRSCardReviewView: UIView {
     let elapsed = Date().timeIntervalSince(startDate)
     let fraction = min(elapsed / delay, 1.0)
 
-    autoPassFillWidthConstraint?.constant = backPassButton.bounds.width * fraction
+    autoPassFillWidthConstraint?.constant = backMediumButton.bounds.width * fraction
 
     if elapsed >= delay {
       stopAutoPassTimer()
-      onGraded?(.pass)
+      onGraded?(.medium)
     }
   }
 
@@ -1756,17 +1786,25 @@ final class SRSCardReviewView: UIView {
     autoPassFillView.isHidden = true
     autoPassFillWidthConstraint?.constant = 0
     backFailButton.configuration?.baseBackgroundColor = .systemRed
-    backPassButton.configuration?.baseBackgroundColor = .systemGreen
+    backHardButton.configuration?.baseBackgroundColor = .systemOrange
+    backMediumButton.configuration?.baseBackgroundColor = .systemGreen
+    backEasyButton.configuration?.baseBackgroundColor = .systemTeal
   }
 
   private func updateGradeButtonTitles(
     failInterval: TimeInterval?,
-    passInterval: TimeInterval?
+    hardInterval: TimeInterval?,
+    mediumInterval: TimeInterval?,
+    easyInterval: TimeInterval?
   ) {
     let failTitle = failInterval.map { "Fail · \(Self.formatInterval($0))" } ?? "Fail"
-    let passTitle = passInterval.map { "Pass · \(Self.formatInterval($0))" } ?? "Pass"
+    let hardTitle = hardInterval.map { "Hard · \(Self.formatInterval($0))" } ?? "Hard"
+    let mediumTitle = mediumInterval.map { "Medium · \(Self.formatInterval($0))" } ?? "Medium"
+    let easyTitle = easyInterval.map { "Easy · \(Self.formatInterval($0))" } ?? "Easy"
     backFailButton.configuration?.title = failTitle
-    backPassButton.configuration?.title = passTitle
+    backHardButton.configuration?.title = hardTitle
+    backMediumButton.configuration?.title = mediumTitle
+    backEasyButton.configuration?.title = easyTitle
   }
 
   private static func formatInterval(_ seconds: TimeInterval) -> String {

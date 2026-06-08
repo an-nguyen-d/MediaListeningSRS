@@ -37,7 +37,9 @@ public enum SRSCardReviewModels {
 
   public enum Grade: Sendable, Equatable {
     case fail
-    case pass
+    case hard
+    case medium
+    case easy
   }
 
   public struct CardViewModel: Sendable, Equatable {
@@ -55,7 +57,9 @@ public enum SRSCardReviewModels {
     public let playbackSpeed: Double
     public let consecutiveCorrectAtCurrentSpeed: Int
     public let failIntervalSeconds: TimeInterval?
-    public let passIntervalSeconds: TimeInterval?
+    public let hardIntervalSeconds: TimeInterval?
+    public let mediumIntervalSeconds: TimeInterval?
+    public let easyIntervalSeconds: TimeInterval?
     public let cardType: SRSCardModel.CardType
     public let readingCardTargetWord: SRSCardModel.ReadingCardTargetWord?
     public let readingCardKana: String?
@@ -76,7 +80,9 @@ public enum SRSCardReviewModels {
       playbackSpeed: Double,
       consecutiveCorrectAtCurrentSpeed: Int,
       failIntervalSeconds: TimeInterval? = nil,
-      passIntervalSeconds: TimeInterval? = nil,
+      hardIntervalSeconds: TimeInterval? = nil,
+      mediumIntervalSeconds: TimeInterval? = nil,
+      easyIntervalSeconds: TimeInterval? = nil,
       cardType: SRSCardModel.CardType = .listening,
       readingCardTargetWord: SRSCardModel.ReadingCardTargetWord? = nil,
       readingCardKana: String? = nil,
@@ -96,7 +102,9 @@ public enum SRSCardReviewModels {
       self.playbackSpeed = playbackSpeed
       self.consecutiveCorrectAtCurrentSpeed = consecutiveCorrectAtCurrentSpeed
       self.failIntervalSeconds = failIntervalSeconds
-      self.passIntervalSeconds = passIntervalSeconds
+      self.hardIntervalSeconds = hardIntervalSeconds
+      self.mediumIntervalSeconds = mediumIntervalSeconds
+      self.easyIntervalSeconds = easyIntervalSeconds
       self.cardType = cardType
       self.readingCardTargetWord = readingCardTargetWord
       self.readingCardKana = readingCardKana
@@ -112,7 +120,7 @@ public enum SRSCardReviewModels {
     public init(score: Int, reasoning: String) {
       self.score = score
       self.reasoning = reasoning
-      self.recommendedGrade = score >= 70 ? .pass : .fail
+      self.recommendedGrade = score >= 70 ? .medium : .fail
     }
   }
 

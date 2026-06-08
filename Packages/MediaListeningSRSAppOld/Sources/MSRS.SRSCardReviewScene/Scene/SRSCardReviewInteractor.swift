@@ -139,7 +139,13 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
   private func handleGraded(_ grade: SRSCardReviewModels.Grade, listenCount: Int) {
     guard currentBatchIndex < currentBatch.count else { return }
     let card = currentBatch[currentBatchIndex]
-    let ratingRawValue: Int = (grade == .fail) ? 1 : 3
+    let ratingRawValue: Int
+    switch grade {
+    case .fail: ratingRawValue = 1
+    case .hard: ratingRawValue = 2
+    case .medium: ratingRawValue = 3
+    case .easy: ratingRawValue = 4
+    }
     let effectiveListenCount: Int? = card.cardType == .reading ? nil : listenCount
     Task { [mediaListeningSRSDatabaseClient, presenter] in
       do {
@@ -148,7 +154,7 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
         )
         let updated = response.updatedModel
         if card.cardType == .listening,
-           grade == .pass,
+           grade != .fail,
            updated.playbackSpeed < 1.0,
            updated.consecutiveCorrectAtCurrentSpeed >= 2 {
           let newSpeed = min(1.0, (updated.playbackSpeed * 100 + 5).rounded() / 100)
@@ -513,7 +519,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
           translationText: translationText,
           labeledRanges: labeledRanges,
           failIntervalSeconds: intervals?.failIntervalSeconds,
-          passIntervalSeconds: intervals?.passIntervalSeconds,
+          hardIntervalSeconds: intervals?.hardIntervalSeconds,
+          mediumIntervalSeconds: intervals?.mediumIntervalSeconds,
+          easyIntervalSeconds: intervals?.easyIntervalSeconds,
           readingCardKana: readingKana,
           readingCardDefinition: readingDefinition
         )
@@ -530,7 +538,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
     translationText: String?,
     labeledRanges: [HighlightableTranscriptLabeledRange],
     failIntervalSeconds: TimeInterval? = nil,
-    passIntervalSeconds: TimeInterval? = nil,
+    hardIntervalSeconds: TimeInterval? = nil,
+    mediumIntervalSeconds: TimeInterval? = nil,
+    easyIntervalSeconds: TimeInterval? = nil,
     readingCardKana: String? = nil,
     readingCardDefinition: String? = nil
   ) {
@@ -560,7 +570,9 @@ final class SRSCardReviewInteractor: SRSCardReviewInteractorProtocol {
       playbackSpeed: card.playbackSpeed,
       consecutiveCorrectAtCurrentSpeed: card.consecutiveCorrectAtCurrentSpeed,
       failIntervalSeconds: failIntervalSeconds,
-      passIntervalSeconds: passIntervalSeconds,
+      hardIntervalSeconds: hardIntervalSeconds,
+      mediumIntervalSeconds: mediumIntervalSeconds,
+      easyIntervalSeconds: easyIntervalSeconds,
       cardType: card.cardType,
       readingCardTargetWord: card.readingCardTargetWord,
       readingCardKana: readingCardKana,

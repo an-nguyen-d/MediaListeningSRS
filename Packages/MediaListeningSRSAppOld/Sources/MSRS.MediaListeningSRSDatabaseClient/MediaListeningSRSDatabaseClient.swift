@@ -375,10 +375,19 @@ public struct MediaListeningSRSDatabaseClient: Sendable {
       }
       public struct Response: Sendable, Equatable {
         public let failIntervalSeconds: TimeInterval
-        public let passIntervalSeconds: TimeInterval
-        public init(failIntervalSeconds: TimeInterval, passIntervalSeconds: TimeInterval) {
+        public let hardIntervalSeconds: TimeInterval
+        public let mediumIntervalSeconds: TimeInterval
+        public let easyIntervalSeconds: TimeInterval
+        public init(
+          failIntervalSeconds: TimeInterval,
+          hardIntervalSeconds: TimeInterval,
+          mediumIntervalSeconds: TimeInterval,
+          easyIntervalSeconds: TimeInterval
+        ) {
           self.failIntervalSeconds = failIntervalSeconds
-          self.passIntervalSeconds = passIntervalSeconds
+          self.hardIntervalSeconds = hardIntervalSeconds
+          self.mediumIntervalSeconds = mediumIntervalSeconds
+          self.easyIntervalSeconds = easyIntervalSeconds
         }
       }
     }

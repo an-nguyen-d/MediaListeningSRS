@@ -38,6 +38,7 @@ final class ProcessingQueueInteractor: ProcessingQueueInteractorProtocol {
   private var totalCandidateCount: Int = 0
 
   var onCreateAllProgress: ((_ completed: Int, _ total: Int) -> Void)?
+  var onExportClipProgress: ((_ completed: Int, _ total: Int) -> Void)?
   var onCreateAllFinished: ((_ createdCount: Int, _ errorCount: Int) -> Void)?
 
   init(
@@ -287,7 +288,9 @@ final class ProcessingQueueInteractor: ProcessingQueueInteractorProtocol {
         }
 
         await MainActor.run { self?.onCreateAllProgress?(-1, total) }
-        await ClipExportManager.shared.waitUntilDrained()
+        await ClipExportManager.shared.waitUntilDrained { [weak self] completed, total in
+          await MainActor.run { self?.onExportClipProgress?(completed, total) }
+        }
         await MainActor.run { self?.finishCreateAll(created: createdCount, errors: errorCount) }
       } catch {
         await ClipExportManager.shared.waitUntilDrained()

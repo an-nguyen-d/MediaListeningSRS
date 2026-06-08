@@ -368,11 +368,15 @@ extension MediaListeningSRSDatabaseClient {
           let preview = fsrs.repeat(card: currentCard, now: now)
 
           let failDue = preview[.again]?.card.due ?? now
-          let passDue = preview[.good]?.card.due ?? now
+          let hardDue = preview[.hard]?.card.due ?? now
+          let mediumDue = preview[.good]?.card.due ?? now
+          let easyDue = preview[.easy]?.card.due ?? now
 
           return .init(
             failIntervalSeconds: max(0, failDue.timeIntervalSince(now)),
-            passIntervalSeconds: max(0, passDue.timeIntervalSince(now))
+            hardIntervalSeconds: max(0, hardDue.timeIntervalSince(now)),
+            mediumIntervalSeconds: max(0, mediumDue.timeIntervalSince(now)),
+            easyIntervalSeconds: max(0, easyDue.timeIntervalSince(now))
           )
         }
       },

@@ -62,6 +62,9 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
     interactor.onCreateAllProgress = { [weak self] completed, total in
       self?.updateCreateAllProgress(completed: completed, total: total)
     }
+    interactor.onExportClipProgress = { [weak self] completed, total in
+      self?.updateExportClipProgress(completed: completed, total: total)
+    }
     interactor.onCreateAllFinished = { [weak self] created, errors in
       self?.handleCreateAllFinished(created: created, errors: errors)
     }
@@ -389,10 +392,16 @@ public final class ProcessingQueueVC: UIViewController, ProcessingQueueDisplayer
     guard let overlay = createAllOverlay,
           let progressView = overlay.subviews.compactMap({ $0 as? CreateAllProgressView }).first else { return }
     if completed == -1 {
-      progressView.showExportingPhase()
+      progressView.showExportingPhase(total: total)
     } else {
       progressView.update(completed: completed, total: total)
     }
+  }
+
+  private func updateExportClipProgress(completed: Int, total: Int) {
+    guard let overlay = createAllOverlay,
+          let progressView = overlay.subviews.compactMap({ $0 as? CreateAllProgressView }).first else { return }
+    progressView.updateExportProgress(completed: completed, total: total)
   }
 
   private func handleCreateAllFinished(created: Int, errors: Int) {

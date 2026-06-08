@@ -93,7 +93,9 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     let nc = NotificationCenter.default
     nc.addObserver(self, selector: #selector(returnPressed), name: GlobalHotkey.commandOptionQ, object: nil)
     nc.addObserver(self, selector: #selector(failPressed), name: GlobalHotkey.commandOptionW, object: nil)
-    nc.addObserver(self, selector: #selector(passPressed), name: GlobalHotkey.commandOptionE, object: nil)
+    nc.addObserver(self, selector: #selector(hardPressed), name: GlobalHotkey.commandOptionE, object: nil)
+    nc.addObserver(self, selector: #selector(mediumPressed), name: GlobalHotkey.commandOptionR, object: nil)
+    nc.addObserver(self, selector: #selector(easyPressed), name: GlobalHotkey.commandOptionT, object: nil)
     nc.addObserver(self, selector: #selector(speedDownPressed), name: GlobalHotkey.commandOptionY, object: nil)
     nc.addObserver(self, selector: #selector(speedUpPressed), name: GlobalHotkey.commandOptionU, object: nil)
     nc.addObserver(self, selector: #selector(spacePressed), name: GlobalHotkey.commandOptionI, object: nil)
@@ -111,17 +113,24 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
       UIKeyCommand(input: "t", modifierFlags: [], action: #selector(tPressed), discoverabilityTitle: "Toggle Thumbnail"),
       UIKeyCommand(input: " ", modifierFlags: [], action: #selector(spacePressed), discoverabilityTitle: "Play"),
       UIKeyCommand(input: "\r", modifierFlags: [], action: #selector(returnPressed), discoverabilityTitle: "Reveal Back"),
-      UIKeyCommand(input: "1", modifierFlags: [], action: #selector(failPressed), discoverabilityTitle: "Fail"),
-      UIKeyCommand(input: "2", modifierFlags: [], action: #selector(passPressed), discoverabilityTitle: "Pass"),
     ]
     if MSRSAppSettings.numpadHotkeysEnabled {
       commands.append(contentsOf: [
         UIKeyCommand(input: "7", modifierFlags: [], action: #selector(returnPressed), discoverabilityTitle: "Reveal Back (Numpad)"),
-        UIKeyCommand(input: "8", modifierFlags: [], action: #selector(failPressed), discoverabilityTitle: "Fail (Numpad)"),
-        UIKeyCommand(input: "9", modifierFlags: [], action: #selector(passPressed), discoverabilityTitle: "Pass (Numpad)"),
-        UIKeyCommand(input: "4", modifierFlags: [], action: #selector(speedDownPressed), discoverabilityTitle: "Speed −0.1 (Numpad)"),
-        UIKeyCommand(input: "5", modifierFlags: [], action: #selector(spacePressed), discoverabilityTitle: "Play/Pause (Numpad)"),
-        UIKeyCommand(input: "6", modifierFlags: [], action: #selector(speedUpPressed), discoverabilityTitle: "Speed +0.1 (Numpad)"),
+        UIKeyCommand(input: "4", modifierFlags: [], action: #selector(failPressed), discoverabilityTitle: "Fail (Numpad)"),
+        UIKeyCommand(input: "5", modifierFlags: [], action: #selector(hardPressed), discoverabilityTitle: "Hard (Numpad)"),
+        UIKeyCommand(input: "6", modifierFlags: [], action: #selector(mediumPressed), discoverabilityTitle: "Medium (Numpad)"),
+        UIKeyCommand(input: "+", modifierFlags: [], action: #selector(easyPressed), discoverabilityTitle: "Easy (Numpad)"),
+        UIKeyCommand(input: "1", modifierFlags: [], action: #selector(speedDownPressed), discoverabilityTitle: "Speed −0.1 (Numpad)"),
+        UIKeyCommand(input: "2", modifierFlags: [], action: #selector(spacePressed), discoverabilityTitle: "Play/Pause (Numpad)"),
+        UIKeyCommand(input: "3", modifierFlags: [], action: #selector(speedUpPressed), discoverabilityTitle: "Speed +0.1 (Numpad)"),
+      ])
+    } else {
+      commands.append(contentsOf: [
+        UIKeyCommand(input: "1", modifierFlags: [], action: #selector(failPressed), discoverabilityTitle: "Fail"),
+        UIKeyCommand(input: "2", modifierFlags: [], action: #selector(hardPressed), discoverabilityTitle: "Hard"),
+        UIKeyCommand(input: "3", modifierFlags: [], action: #selector(mediumPressed), discoverabilityTitle: "Medium"),
+        UIKeyCommand(input: "4", modifierFlags: [], action: #selector(easyPressed), discoverabilityTitle: "Easy"),
       ])
     }
     return commands
@@ -148,12 +157,28 @@ public final class SRSCardReviewVC: UIViewController, SRSCardReviewDisplayer {
     interactor.sendAction(.gradedAndNext(.fail, listenCount: contentView.listenCount))
   }
 
-  @objc private func passPressed() {
+  @objc private func hardPressed() {
+    if MSRSAppSettings.reviewFeedbackEffectsEnabled {
+      ReviewSoundPlayer.play(.passCard)
+      pendingGradeOverlayColor = .systemOrange
+    }
+    interactor.sendAction(.gradedAndNext(.hard, listenCount: contentView.listenCount))
+  }
+
+  @objc private func mediumPressed() {
     if MSRSAppSettings.reviewFeedbackEffectsEnabled {
       ReviewSoundPlayer.play(.passCard)
       pendingGradeOverlayColor = .systemGreen
     }
-    interactor.sendAction(.gradedAndNext(.pass, listenCount: contentView.listenCount))
+    interactor.sendAction(.gradedAndNext(.medium, listenCount: contentView.listenCount))
+  }
+
+  @objc private func easyPressed() {
+    if MSRSAppSettings.reviewFeedbackEffectsEnabled {
+      ReviewSoundPlayer.play(.passCard)
+      pendingGradeOverlayColor = .systemGreen
+    }
+    interactor.sendAction(.gradedAndNext(.easy, listenCount: contentView.listenCount))
   }
 
   @objc private func speedDownPressed() {

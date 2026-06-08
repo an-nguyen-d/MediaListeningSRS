@@ -66,10 +66,16 @@ final class CreateAllProgressView: UIView {
     progressBar.setProgress(fraction, animated: completed > 0)
   }
 
-  func showExportingPhase() {
+  func showExportingPhase(total: Int) {
     titleLabel.text = "Exporting Clips…"
-    progressBar.setProgress(1.0, animated: true)
-    progressLabel.text = "Cards created, exporting video clips"
+    progressBar.setProgress(0, animated: false)
+    progressLabel.text = "0 / \(total)"
+  }
+
+  func updateExportProgress(completed: Int, total: Int) {
+    progressLabel.text = "\(completed) / \(total)"
+    let fraction = total > 0 ? Float(completed) / Float(total) : 0
+    progressBar.setProgress(fraction, animated: true)
   }
 
   func showCompleted(created: Int, errors: Int, onDismiss: @escaping () -> Void) {
